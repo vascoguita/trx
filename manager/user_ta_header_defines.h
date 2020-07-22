@@ -7,8 +7,8 @@
 
 #define TA_FLAGS        TA_FLAG_EXEC_DDR
 
-#define TA_STACK_SIZE   (2 * 1024)
-#define TA_DATA_SIZE    (32 * 1024)
+#define TA_STACK_SIZE   (4 * 1024)
+#define TA_DATA_SIZE    (64 * 1024)
 
 #define TA_VERSION	"0.1"
 
