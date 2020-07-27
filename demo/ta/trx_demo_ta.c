@@ -49,6 +49,12 @@ TEE_Result TA_OpenSessionEntryPoint(uint32_t param_types, TEE_Param params[4], v
         return TEE_ERROR_GENERIC;
     }
 
+    res = trx_write("ka", 3, "ola", 4);
+    if(res != TEE_SUCCESS) {
+        DMSG("trx_write failed with code 0x%x", res);
+        return TEE_ERROR_GENERIC;
+    }
+
     read_data = (void *)malloc(read_data_size * sizeof(char));
     if(read_data == NULL) {
         DMSG("Failed to allocate memory foy read_data buffer");

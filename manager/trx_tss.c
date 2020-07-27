@@ -16,12 +16,11 @@ int trx_tss_init(trx_tss **tss)
         free(*tss);
         return 1;
     }
-    if(((*tss)->pobj_lh = (pobj_list_head*) malloc(sizeof(pobj_list_head))) == NULL) {
+    if(trx_pobj_list_init(&((*tss)->pobj_lh)) != 0){
         free((*tss)->uuid);
         free(*tss);
         return 1;
     }
-    trx_pobj_list_init((*tss)->pobj_lh);
     return 0;
 }
 
@@ -100,36 +99,49 @@ int trx_tss_set_str(char *s, size_t n, trx_tss *tss)
     if(strncmp(s, "[", status) != 0) {
         return 0;
     }
+    DMSG("\nDEBUG\n");
     clip_sub(&result, status, &left, n);
     status = snprintf(uuid_tmp_str, 37, "%s", s + result);
     if (status < 0) {
-        return status;
+        return 0;
     }
+    status = 37 - 1;
+    DMSG("\nDEBUG\n");
+
+    DMSG("\nDEBUG, %d, \'%s\'\n", status, s + result);
     clip_sub(&result, status, &left, n);
     if(tee_uuid_from_str(tss->uuid, uuid_tmp_str) != TEE_SUCCESS) {
         return 0;
     }
+    DMSG("\nDEBUG, %d, \'%s\'\n", status, s + result);
     status = strlen(", ");
     if(strncmp(s + result, ", ", status) != 0) {
         return 0;
     }
+    DMSG("\nDEBUG\n");
     clip_sub(&result, status, &left, n);
-    status = trx_pobj_list_set_str(s + result, left, tss->pobj_lh);
-    if (status < 0) {
-        return status;
+    if((status = trx_pobj_list_set_str(s + result, left, tss->pobj_lh)) == 0) {
+        return 0;
     }
+    DMSG("\nDEBUG\n");
     clip_sub(&result, status, &left, n);
     status = strlen("]");
     if(strncmp(s + result, "]", status) != 0) {
         return 0;
     }
+    DMSG("\nDEBUG\n");
 
     return (int)result + status;
 }
 
-void trx_tss_list_init(tss_list_head *h)
+int trx_tss_list_init(tss_list_head **h)
 {
-    SLIST_INIT(h);
+
+    if((*h = (tss_list_head*) malloc(sizeof(tss_list_head))) == NULL) {
+        return 1;
+    }
+    SLIST_INIT(*h);
+    return 0;
 }
 
 void trx_tss_list_clear(tss_list_head *h)
@@ -141,6 +153,7 @@ void trx_tss_list_clear(tss_list_head *h)
         trx_tss_clear(e->tss);
         free(e);
     }
+    free(h);
 }
 
 size_t trx_tss_list_len(tss_list_head *h)
@@ -166,6 +179,17 @@ int trx_tss_list_add(trx_tss *tss, tss_list_head *h)
     return 0;
 }
 
+trx_tss *trx_tss_list_get(TEE_UUID *uuid, tss_list_head *h)
+{
+    tss_entry *e;
+
+    SLIST_FOREACH(e, h, _tss_entries) {
+        if(memcmp(e->tss->uuid, uuid, sizeof(TEE_UUID)) == 0) {
+            return e->tss;
+        }
+    }
+    return NULL;
+}
 
 int trx_tss_list_snprint(char *s, size_t n, tss_list_head *h) {
     tss_entry *e;
@@ -217,32 +241,39 @@ int trx_tss_list_set_str(char *s, size_t n, tss_list_head *h)
         return 0;
     }
     clip_sub(&result, status, &left, n);
-    if((tss_list_len = strtoul(s + result, NULL, 0)) == 0) {
-        return 0;
-    }
+    DMSG("\nDEBUG\n");
+    tss_list_len = strtoul(s + result, NULL, 0);
     status = snprintf(NULL, 0, "%zu", tss_list_len);
     clip_sub(&result, status, &left, n);
+    DMSG("\nDEBUG\n");
     status = strlen(", ");
     if(strncmp(s + result, ", ", status) != 0) {
         return 0;
     }
+    DMSG("\nDEBUG\n");
     clip_sub(&result, status, &left, n);
     for(i = 0; i < tss_list_len; i++) {
+        DMSG("\nDEBUG\n");
         if(trx_tss_init(&tss) != 0) {
             return 0;
         }
+        DMSG("\nDEBUG\n");
         if((status = trx_tss_set_str(s + result, left, tss)) == 0) {
             return 0;
         }
+        DMSG("\nDEBUG\n");
         clip_sub(&result, status, &left, n);
         if(trx_tss_list_add(tss, h) != 0) {
             return 0;
         }
+        DMSG("\nDEBUG\n");
     }
+    DMSG("\nDEBUG\n");
     status = strlen("]");
     if(strncmp(s + result, "]", status) != 0) {
         return 0;
     }
+    DMSG("\nDEBUG\n");
 
     return (int)result + status;
 }

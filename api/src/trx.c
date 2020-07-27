@@ -69,7 +69,7 @@ TEE_Result trx_read(const void *id, size_t id_size,
     }
     *data_size = params[1].memref.size;
 
-    return TEE_SUCCESS;
+    return res;
 }
 
 TEE_Result trx_list(void *objectIdList) {

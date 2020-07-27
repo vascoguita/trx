@@ -59,7 +59,7 @@ int trx_pobj_snprint(char *s, size_t n, trx_pobj *pobj)
         return status;
     }
     clip_sub(&result, status, &left, n);
-    status = snprintf(s + result, left, "%zu", pobj->ree_id);
+    status = snprintf(s + result, left, "%lu", pobj->ree_id);
     if (status < 0) {
         return status;
     }
@@ -83,51 +83,71 @@ int trx_pobj_set_str(char *s, size_t n, trx_pobj *pobj)
     if(strncmp(s, "[", status) != 0) {
         return 0;
     }
+    DMSG("\nDEBUG\n");
     clip_sub(&result, status, &left, n);
     if((pobj->id_size = strtoul(s + result, NULL, 0)) == 0) {
         return 0;
     }
+    DMSG("\nDEBUG\n");
     status = snprintf(NULL, 0, "%zu", pobj->id_size);
+    DMSG("\nDEBUG\n");
     clip_sub(&result, status, &left, n);
+    if((pobj->id = (void *)malloc(pobj->id_size)) == NULL) {
+        return 0;
+    }
     status = strlen(", ");
     if(strncmp(s + result, ", ", status) != 0) {
         return 0;
     }
+    DMSG("\nDEBUG\n");
     clip_sub(&result, status, &left, n);
     for(i = 0; i < pobj->id_size; i++) {
         status = strlen("\\x");
+        DMSG("\nDEBUG\n");
         if(strncmp(s + result, "\\x", status) != 0) {
             return 0;
         }
+        DMSG("\nDEBUG\n");
         clip_sub(&result, status, &left, n);
         ((uint8_t*)pobj->id)[i] = strtoul(s + result, NULL, 16);
+        DMSG("\nDEBUG\n");
         status = snprintf(NULL, 0, "%x", ((uint8_t*)pobj->id)[i]);
         if (status < 0) {
             return status;
         }
+        DMSG("\nDEBUG\n");
         clip_sub(&result, status, &left, n);
     }
+    DMSG("\nDEBUG\n");
     status = strlen(", ");
     if(strncmp(s + result, ", ", status) != 0) {
         return 0;
     }
+    DMSG("\nDEBUG\n");
     clip_sub(&result, status, &left, n);
     if((pobj->ree_id = strtoul(s + result, NULL, 0)) == 0) {
         return 0;
     }
-    status = snprintf(NULL, 0, "%zu", pobj->ree_id);
+    DMSG("\nDEBUG\n");
+    status = snprintf(NULL, 0, "%lu", pobj->ree_id);
     clip_sub(&result, status, &left, n);
+    DMSG("\nDEBUG\n");
     status = strlen("]");
     if(strncmp(s + result, "]", status) != 0) {
         return 0;
     }
-
+    DMSG("\nDEBUG\n");
     return (int)result + status;
 }
 
-void trx_pobj_list_init(pobj_list_head *h)
+int trx_pobj_list_init(pobj_list_head **h)
 {
-    SLIST_INIT(h);
+
+    if((*h = (pobj_list_head*) malloc(sizeof(pobj_list_head))) == NULL) {
+        return 1;
+    }
+    SLIST_INIT(*h);
+    return 0;
 }
 
 void trx_pobj_list_clear(pobj_list_head *h)
@@ -151,6 +171,18 @@ size_t trx_pobj_list_len(pobj_list_head *h)
     }
 
     return i;
+}
+
+trx_pobj *trx_pobj_list_get(void *id, size_t id_size, pobj_list_head *h)
+{
+    pobj_entry *e;
+
+    SLIST_FOREACH(e, h, _pobj_entries) {
+        if((e->pobj->id_size == id_size) && (memcmp(e->pobj->id, id, id_size) == 0)) {
+            return e->pobj;
+        }
+    }
+    return NULL;
 }
 
 int trx_pobj_list_add(trx_pobj *pobj, pobj_list_head *h)
@@ -213,33 +245,42 @@ int trx_pobj_list_set_str(char *s, size_t n, pobj_list_head *h) {
     if (strncmp(s, "[", status) != 0) {
         return 0;
     }
+    DMSG("\nDEBUG\n");
     clip_sub(&result, status, &left, n);
     if ((pobj_list_len = strtoul(s + result, NULL, 0)) == 0) {
         return 0;
     }
+    DMSG("\nDEBUG\n");
     status = snprintf(NULL, 0, "%zu", pobj_list_len);
     clip_sub(&result, status, &left, n);
+    DMSG("\nDEBUG\n");
     status = strlen(", ");
     if (strncmp(s + result, ", ", status) != 0) {
         return 0;
     }
+    DMSG("\nDEBUG\n");
     clip_sub(&result, status, &left, n);
     for (i = 0; i < pobj_list_len; i++) {
         if (trx_pobj_init(&pobj) != 0) {
             return 0;
         }
+        DMSG("\nDEBUG\n");
         if ((status = trx_pobj_set_str(s + result, left, pobj)) == 0) {
             return 0;
         }
+        DMSG("\nDEBUG\n");
         clip_sub(&result, status, &left, n);
         if (trx_pobj_list_add(pobj, h) != 0) {
             return 0;
         }
+        DMSG("\nDEBUG\n");
     }
+    DMSG("\nDEBUG\n");
     status = strlen("]");
     if (strncmp(s + result, "]", status) != 0) {
         return 0;
     }
+    DMSG("\nDEBUG\n");
 
     return (int) result + status;
 }

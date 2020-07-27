@@ -21,9 +21,10 @@ typedef struct _tss_entry {
 } tss_entry;
 typedef SLIST_HEAD(_tss_list_head, _tss_entry) tss_list_head;
 
-void trx_tss_list_init(tss_list_head *h);
+int trx_tss_list_init(tss_list_head **h);
 void trx_tss_list_clear(tss_list_head *h);
 size_t trx_tss_list_len(tss_list_head *h);
+trx_tss *trx_tss_list_get(TEE_UUID *uuid, tss_list_head *h);
 int trx_tss_list_add(trx_tss *tss, tss_list_head *h);
 int trx_tss_list_snprint(char *s, size_t n, tss_list_head *h);
 int trx_tss_list_set_str(char *s, size_t n, tss_list_head *h);

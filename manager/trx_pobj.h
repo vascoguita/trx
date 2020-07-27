@@ -21,9 +21,10 @@ typedef struct _pobj_entry {
 } pobj_entry;
 typedef SLIST_HEAD(_pobj_list_head, _pobj_entry) pobj_list_head;
 
-void trx_pobj_list_init(pobj_list_head *h);
+int trx_pobj_list_init(pobj_list_head **h);
 void trx_pobj_list_clear(pobj_list_head *h);
 size_t trx_pobj_list_len(pobj_list_head *h);
+trx_pobj *trx_pobj_list_get(void *id, size_t id_size, pobj_list_head *h);
 int trx_pobj_list_add(trx_pobj *pobj, pobj_list_head *h);
 int trx_pobj_list_snprint(char *s, size_t n, pobj_list_head *h);
 int trx_pobj_list_set_str(char *s, size_t n, pobj_list_head *h);
