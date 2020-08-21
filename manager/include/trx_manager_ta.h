@@ -9,5 +9,7 @@
 #define TA_TRX_MANAGER_CMD_WRITE    1
 #define TA_TRX_MANAGER_CMD_READ     2
 #define TA_TRX_MANAGER_CMD_LIST     3
+#define TA_TRX_MANAGER_CMD_MOUNT    4
+#define TA_TRX_MANAGER_CMD_SHARE    5
 
 #endif

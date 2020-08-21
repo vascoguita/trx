@@ -3,20 +3,20 @@
 #include <stdlib.h>
 #include <ree_fs_api.h>
 
+#include "trx_manager_ta.h"
 #include "trx_manager_private.h"
 #include "trx_manager_defaults.h"
-#include "trx_db_map.h"
 #include "trx_db.h"
 #include "trx_tss.h"
 #include "utils.h"
 
 TEE_Result setup(void *sess_ctx, uint32_t param_types, TEE_Param params[4]) {
     uint32_t exp_param_types;
-    char *db_path;
-    size_t db_path_size;
+    char *ree_dirname;
+    size_t ree_dirname_size;
     trx_db *db;
-    trx_db_map *db_map;
-
+    db_list_head *db_lh;
+    TEE_Result res;
 	(void)&sess_ctx;
 
 	DMSG("has been called");
@@ -27,61 +27,70 @@ TEE_Result setup(void *sess_ctx, uint32_t param_types, TEE_Param params[4]) {
 		return TEE_ERROR_BAD_PARAMETERS;
     }
 
-    db_path = params[0].memref.buffer;
-    db_path_size = (size_t)params[0].memref.size;
+    ree_dirname = params[0].memref.buffer;
+    ree_dirname_size = (size_t)params[0].memref.size;
 
-    if(trx_db_init(&db) != 0) {
+    if(!(db = trx_db_init())){
         EMSG("TA_TRX_MANAGER_CMD_SETUP failed calling function \'trx_db_init\'");
         return TEE_ERROR_GENERIC;
     }
-    if(trx_db_save(db, db_path, db_path_size) != 0) {
+    if(!(db->mount_point = strdup(dirname(NULL)))){
+        EMSG("TA_TRX_MANAGER_CMD_SETUP failed calling function \'strdup\'");
+        trx_db_clear(db);
+        return TEE_ERROR_GENERIC;
+    }
+    db->mount_point_size = strlen(db->mount_point) + 1;
+    db->ree_dirname = strndup(ree_dirname, ree_dirname_size);
+    db->ree_dirname_size = ree_dirname_size;
+    if(trx_db_save(db) != 0){
         EMSG("TA_TRX_MANAGER_CMD_SETUP failed calling function \'trx_db_save\'");
         trx_db_clear(db);
         return TEE_ERROR_GENERIC;
     }
-    trx_db_clear(db);
 
-    if(trx_db_map_init(&db_map) != 0) {
-        EMSG("TA_TRX_MANAGER_CMD_SETUP failed calling function \'trx_db_map_init\'");
+    if(!(db_lh = trx_db_list_init())){
+        EMSG("TA_TRX_MANAGER_CMD_SETUP failed calling function \'trx_db_list_init\'");
+        trx_db_clear(db);
         return TEE_ERROR_GENERIC;
     }
-    db_map->path_size = db_path_size;
-    db_map->path = strndup(db_path, db_path_size - 1);
-    if(trx_db_map_save(db_map, db_map_pobj_id, db_map_pobj_id_size) != 0) {
-        EMSG("TA_TRX_MANAGER_CMD_SETUP failed calling function \'trx_db_map_save\'");
-        trx_db_map_clear(db_map);
+    if(trx_db_list_add(db, db_lh) != 0) {
+        EMSG("TA_TRX_MANAGER_CMD_SETUP failed calling function \'trx_db_list_add\'");
+        trx_db_clear(db);
+        trx_db_list_clear(db_lh);
         return TEE_ERROR_GENERIC;
     }
-    trx_db_map_clear(db_map);
-
-    return TEE_SUCCESS;
+    res = trx_db_list_save(db_lh);
+    if(res != TEE_SUCCESS){
+        EMSG("TA_TRX_MANAGER_CMD_SETUP failed calling function \'trx_db_list_save\'");
+        trx_db_list_clear(db_lh);
+        return TEE_ERROR_GENERIC;
+    }
+    trx_db_list_clear(db_lh);
+    return res;
 }
 
 TEE_Result write(void *sess_ctx, uint32_t param_types, TEE_Param params[4]) {
     uint32_t exp_param_types;
     TEE_Identity identity;
-    TEE_Result res;
-    void *id, *data;
-    char *dir, *filename;
-    size_t id_size, filename_size, data_size;
     TEE_UUID *uuid;
-    trx_db_map *db_map;
-    trx_db *db;
+    TEE_Result res;
+    char *path;
+    void *data;
+    size_t path_size, data_size;
+    db_list_head *db_lh;
     trx_pobj *pobj;
-    int fd;
 
     (void)&sess_ctx;
 
     DMSG("has been called");
 
     exp_param_types = TEE_PARAM_TYPES(TEE_PARAM_TYPE_MEMREF_INPUT, TEE_PARAM_TYPE_MEMREF_INPUT,
-                                      TEE_PARAM_TYPE_NONE, TEE_PARAM_TYPE_NONE);
+                                        TEE_PARAM_TYPE_NONE, TEE_PARAM_TYPE_NONE);
     if(param_types != exp_param_types) {
         return TEE_ERROR_BAD_PARAMETERS;
     }
-
-    id = params[0].memref.buffer;
-    id_size = params[0].memref.size;
+    path = params[0].memref.buffer;
+    path_size = params[0].memref.size;
     data = params[1].memref.buffer;
     data_size = params[1].memref.size;
 
@@ -92,75 +101,49 @@ TEE_Result write(void *sess_ctx, uint32_t param_types, TEE_Param params[4]) {
     }
     uuid = &identity.uuid;
 
-    if(trx_db_map_init(&db_map) != 0) {
-        EMSG("TA_TRX_MANAGER_CMD_WRITE failed calling function \'trx_db_map_init\'");
+    if(!(db_lh = trx_db_list_init())) {
+        EMSG("TA_TRX_MANAGER_CMD_WRITE failed calling function \'trx_db_list_init\'");
         return TEE_ERROR_GENERIC;
     }
-    if(trx_db_map_load(db_map, db_map_pobj_id, db_map_pobj_id_size) != 0) {
-        EMSG("TA_TRX_MANAGER_CMD_WRITE failed calling function \'trx_db_map_load\'");
-        trx_db_map_clear(db_map);
+    if(trx_db_list_load(db_lh) != TEE_SUCCESS) {
+        EMSG("TA_TRX_MANAGER_CMD_WRITE failed calling function \'trx_db_list_load\'");
+        trx_db_list_clear(db_lh);
         return TEE_ERROR_GENERIC;
     }
-    if(trx_db_init(&db) != 0) {
-        EMSG("TA_TRX_MANAGER_CMD_WRITE failed calling function \'trx_db_init\'");
-        trx_db_map_clear(db_map);
-        return TEE_ERROR_GENERIC;
-    }
-    if(trx_db_load(db, db_map->path, db_map->path_size) != 0) {
-        EMSG("TA_TRX_MANAGER_CMD_WRITE failed calling function \'trx_db_load\'");
-        trx_db_clear(db);
-        trx_db_map_clear(db_map);
-        return TEE_ERROR_GENERIC;
-    }
-    if((pobj = trx_db_get(uuid, id, id_size, db)) == NULL) {
-        if((pobj = trx_db_insert(uuid, id, id_size, db)) == NULL) {
-            EMSG("TA_TRX_MANAGER_CMD_WRITE failed calling function \'trx_db_insert\'");
-            trx_db_clear(db);
-            trx_db_map_clear(db_map);
-            return TEE_ERROR_GENERIC;
-        }
-        if(trx_db_save(db, db_map->path, db_map->path_size) != 0) {
-            EMSG("TA_TRX_MANAGER_CMD_WRITE failed calling function \'trx_db_save\'");
-            trx_db_clear(db);
-            trx_db_map_clear(db_map);
+    if((pobj = trx_db_list_get_pobj(uuid, path, path_size, db_lh)) == NULL) {
+        if((pobj = trx_db_list_insert_pobj(uuid, path, path_size, db_lh)) == NULL) {
+            EMSG("TA_TRX_MANAGER_CMD_WRITE failed calling function \'trx_db_list_insert_pobj\'");
+            trx_db_list_clear(db_lh);
             return TEE_ERROR_GENERIC;
         }
     }
-    dir = dirname(db_map->path);
-    filename_size = snprintf(NULL, 0, "%s/%lu", dir, pobj->ree_id) + 1;
-    if((filename = (char *)malloc(filename_size * sizeof(char))) == NULL) {
-        trx_db_map_clear(db_map);
-        trx_db_clear(db);
+    pobj->data_size = data_size;
+    pobj->data = malloc(data_size);
+    memcpy(pobj->data, data, data_size);
+    if(trx_db_save(pobj->db) != 0) {
+        EMSG("TA_TRX_MANAGER_CMD_WRITE failed calling function \'trx_db_save\'");
+        trx_db_list_clear(db_lh);
         return TEE_ERROR_GENERIC;
     }
-    snprintf(filename, filename_size, "%s/%lu", dir, pobj->ree_id);
-    trx_db_map_clear(db_map);
-    trx_db_clear(db);
-    res = ree_fs_api_create(filename, filename_size, &fd);
-    if(res != TEE_SUCCESS) {
-        EMSG("TA_TRX_MANAGER_CMD_WRITE failed calling function \'ree_fs_create\' with code 0x%x", res);
-        return res;
+    if(trx_pobj_save(pobj) != 0) {
+        EMSG("TA_TRX_MANAGER_CMD_WRITE failed calling function \'trx_pobj_save\'");
+        trx_db_list_clear(db_lh);
+        return TEE_ERROR_GENERIC;
     }
-    res = ree_fs_api_write(fd, 0, data, data_size);
-    if(res != TEE_SUCCESS) {
-        EMSG("TA_TRX_MANAGER_CMD_WRITE failed calling function \'ree_fs_write\' with code 0x%x", res);
-    }
-    ree_fs_api_close(fd);
+    trx_db_list_clear(db_lh);
     return res;
 }
 
 TEE_Result read(void *sess_ctx, uint32_t param_types, TEE_Param params[4]) {
-    uint32_t exp_param_types;
+    uint32_t exp_param_types, *data_size;
     TEE_Identity identity;
-    TEE_Result res;
-    void *id, *data;
-    char *dir, *filename;
-    size_t id_size, filename_size, data_size;
     TEE_UUID *uuid;
-    trx_db_map *db_map;
-    trx_db *db;
+    TEE_Result res;
+    char *path;
+    void *data;
+    size_t path_size;
+    db_list_head *db_lh;
     trx_pobj *pobj;
-    int fd;
 
     (void)&sess_ctx;
 
@@ -172,10 +155,10 @@ TEE_Result read(void *sess_ctx, uint32_t param_types, TEE_Param params[4]) {
         return TEE_ERROR_BAD_PARAMETERS;
     }
 
-    id = params[0].memref.buffer;
-    id_size = params[0].memref.size;
+    path = params[0].memref.buffer;
+    path_size = params[0].memref.size;
     data = params[1].memref.buffer;
-    data_size = params[1].memref.size;
+    data_size = &(params[1].memref.size);
 
     res = TEE_GetPropertyAsIdentity(TEE_PROPSET_CURRENT_CLIENT,  "gpd.client.identity", &identity);
     if(res != TEE_SUCCESS) {
@@ -184,74 +167,97 @@ TEE_Result read(void *sess_ctx, uint32_t param_types, TEE_Param params[4]) {
     }
     uuid = &identity.uuid;
 
-    if(trx_db_map_init(&db_map) != 0) {
-        EMSG("TA_TRX_MANAGER_CMD_WRITE failed calling function \'trx_db_map_init\'");
+    if(!(db_lh = trx_db_list_init())) {
+        EMSG("TA_TRX_MANAGER_CMD_WRITE failed calling function \'trx_db_list_init\'");
         return TEE_ERROR_GENERIC;
     }
-    if(trx_db_map_load(db_map, db_map_pobj_id, db_map_pobj_id_size) != 0) {
-        EMSG("TA_TRX_MANAGER_CMD_READ failed calling function \'trx_db_map_load\'");
-        trx_db_map_clear(db_map);
+    if(trx_db_list_load(db_lh) != TEE_SUCCESS) {
+        EMSG("TA_TRX_MANAGER_CMD_WRITE failed calling function \'trx_db_list_load\'");
+        trx_db_list_clear(db_lh);
         return TEE_ERROR_GENERIC;
     }
-    if(trx_db_init(&db) != 0) {
-        EMSG("TA_TRX_MANAGER_CMD_READ failed calling function \'trx_db_init\'");
-        trx_db_map_clear(db_map);
+    if((pobj = trx_db_list_get_pobj(uuid, path, path_size, db_lh)) == NULL) {
+        EMSG("TA_TRX_MANAGER_CMD_WRITE failed calling function \'trx_db_list_get_pobj\'");
+        trx_db_list_clear(db_lh);
         return TEE_ERROR_GENERIC;
     }
-    DMSG("\n\n\'%s\', %zu\n\n", db_map->path, db_map->path_size);
-    if(trx_db_load(db, db_map->path, db_map->path_size) != 0) {
-        EMSG("TA_TRX_MANAGER_CMD_READ failed calling function \'trx_db_load\'");
-        trx_db_clear(db);
-        trx_db_map_clear(db_map);
+    if(trx_pobj_load(pobj) != 0) {
+        EMSG("TA_TRX_MANAGER_CMD_WRITE failed calling function \'trx_pobj_load\'");
+        trx_db_list_clear(db_lh);
         return TEE_ERROR_GENERIC;
     }
-    if((pobj = trx_db_get(uuid, id, id_size, db)) == NULL) {
-        EMSG("TA_TRX_MANAGER_CMD_READ failed calling function \'trx_db_get\'");
-        trx_db_clear(db);
-        trx_db_map_clear(db_map);
-        return TEE_ERROR_GENERIC;
+    if(*data_size > (uint32_t)pobj->data_size) {
+        *data_size = (uint32_t)pobj->data_size;
     }
-    dir = dirname(db_map->path);
-    filename_size = snprintf(NULL, 0, "%s/%lu", dir, pobj->ree_id) + 1;
-    if((filename = (char *)malloc(filename_size * sizeof(char))) == NULL) {
-        trx_db_map_clear(db_map);
-        trx_db_clear(db);
-        return TEE_ERROR_GENERIC;
-    }
-    snprintf(filename, filename_size, "%s/%lu", dir, pobj->ree_id);
-    trx_db_map_clear(db_map);
-    trx_db_clear(db);
-
-    res = ree_fs_api_open(filename, filename_size, &fd);
-    if(res != TEE_SUCCESS) {
-        EMSG("TA_TRX_MANAGER_CMD_READ failed calling function \'ree_fs_open\' with code 0x%x", res);
-        return res;
-    }
-
-    res = ree_fs_api_read(fd, 0, data, &data_size);
-    if(res != TEE_SUCCESS) {
-        EMSG("TA_TRX_MANAGER_CMD_READ failed calling function \'ree_fs_read\' with code 0x%x", res);
-    }
-
-    params[1].memref.size = data_size;
-
-    ree_fs_api_close(fd);
+    memcpy(data, pobj->data, (size_t)*data_size);
+    trx_db_list_clear(db_lh);
     return res;
 }
 
 TEE_Result list(void *sess_ctx, uint32_t param_types, TEE_Param params[4]) {
-    uint32_t exp_param_types;
+    uint32_t exp_param_types, *list_size;
+    TEE_Identity identity;
+    TEE_Result res;
+    char *list;
+    TEE_UUID *uuid;
+    db_list_head *db_lh;
+    int tmp_list_size;
 
     (void)&sess_ctx;
+    (void)&param_types;
     (void)&params;
 
     DMSG("has been called");
 
-    exp_param_types = TEE_PARAM_TYPES(TEE_PARAM_TYPE_MEMREF_INPUT, TEE_PARAM_TYPE_MEMREF_INPUT,
+    exp_param_types = TEE_PARAM_TYPES(TEE_PARAM_TYPE_MEMREF_OUTPUT, TEE_PARAM_TYPE_NONE,
                                       TEE_PARAM_TYPE_NONE, TEE_PARAM_TYPE_NONE);
     if(param_types != exp_param_types) {
         return TEE_ERROR_BAD_PARAMETERS;
     }
 
+    list = params[0].memref.buffer;
+    list_size = &(params[0].memref.size);
+
+    res = TEE_GetPropertyAsIdentity(TEE_PROPSET_CURRENT_CLIENT,  "gpd.client.identity", &identity);
+    if(res != TEE_SUCCESS) {
+        EMSG("TRX Manager failed to retrieve client identity, res=0x%08x" , res);
+        return res;
+    }
+    uuid = &identity.uuid;
+
+    if(!(db_lh = trx_db_list_init())) {
+        EMSG("TA_TRX_MANAGER_CMD_LIST failed calling function \'trx_db_list_init\'");
+        return TEE_ERROR_GENERIC;
+    }
+    if(trx_db_list_load(db_lh) != TEE_SUCCESS) {
+        EMSG("TA_TRX_MANAGER_CMD_LIST failed calling function \'trx_db_list_load\'");
+        trx_db_list_clear(db_lh);
+        return TEE_ERROR_GENERIC;
+    }
+    if((tmp_list_size = trx_db_list_path_snprint(list, *list_size, uuid, db_lh) + 1) < 1) {
+        EMSG("TA_TRX_MANAGER_CMD_LIST failed calling function \'trx_db_list_path_snprint\'");
+        trx_db_list_clear(db_lh);
+        return TEE_ERROR_GENERIC;
+    }
+    DMSG("\nDEBUG");
+
+    trx_db_list_clear(db_lh);
+    *list_size = (uint32_t)tmp_list_size;
+    return res;
+}
+
+TEE_Result mount(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
+{
+    (void)&sess_ctx;
+    (void)&param_types;
+    (void)&params;
+    return TEE_SUCCESS;
+}
+
+TEE_Result share(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
+{
+    (void)&sess_ctx;
+    (void)&param_types;
+    (void)&params;
     return TEE_SUCCESS;
 }

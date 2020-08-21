@@ -66,6 +66,10 @@ TEE_Result TA_InvokeCommandEntryPoint(void *sess_ctx, uint32_t cmd, uint32_t par
                 return TEE_ERROR_GENERIC;
             }
             return list(sess_ctx, param_types, params);
+        case TA_TRX_MANAGER_CMD_MOUNT:
+            return mount(sess_ctx, param_types, params);
+        case TA_TRX_MANAGER_CMD_SHARE:
+            return mount(sess_ctx, param_types, params);
         default:
             return TEE_ERROR_NOT_SUPPORTED;
     }
