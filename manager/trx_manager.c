@@ -6,9 +6,10 @@
 #include "trx_manager_ta.h"
 #include "trx_manager_private.h"
 #include "trx_manager_defaults.h"
-#include "trx_db.h"
 #include "trx_tss.h"
+#include "trx_path.h"
 #include "utils.h"
+#include "trx_db.h"
 
 TEE_Result setup(void *sess_ctx, uint32_t param_types, TEE_Param params[4]) {
     uint32_t exp_param_types;
@@ -201,6 +202,7 @@ TEE_Result list(void *sess_ctx, uint32_t param_types, TEE_Param params[4]) {
     char *list;
     TEE_UUID *uuid;
     db_list_head *db_lh;
+    path_list_head *path_lh;
     int tmp_list_size;
 
     (void)&sess_ctx;
@@ -234,13 +236,24 @@ TEE_Result list(void *sess_ctx, uint32_t param_types, TEE_Param params[4]) {
         trx_db_list_clear(db_lh);
         return TEE_ERROR_GENERIC;
     }
-    if((tmp_list_size = trx_db_list_path_snprint(list, *list_size, uuid, db_lh) + 1) < 1) {
-        EMSG("TA_TRX_MANAGER_CMD_LIST failed calling function \'trx_db_list_path_snprint\'");
+    if(!(path_lh = trx_path_list_init())) {
+        EMSG("TA_TRX_MANAGER_CMD_LIST failed calling function \'trx_path_list_init\'");
         trx_db_list_clear(db_lh);
         return TEE_ERROR_GENERIC;
     }
-    DMSG("\nDEBUG");
-
+    if(trx_db_list_to_path_list(path_lh, uuid, db_lh) != 0) {
+        EMSG("TA_TRX_MANAGER_CMD_LIST failed calling function \'trx_db_list_to_path_list\'");
+        trx_db_list_clear(db_lh);
+        trx_path_list_clear(path_lh);
+        return TEE_ERROR_GENERIC;
+    }
+    if((tmp_list_size = trx_path_list_snprint(list, *list_size, path_lh) + 1) < 1) {
+        EMSG("TA_TRX_MANAGER_CMD_LIST failed calling function \'trx_path_list_snprint\'");
+        trx_db_list_clear(db_lh);
+        trx_path_list_clear(path_lh);
+        return TEE_ERROR_GENERIC;
+    }
+    trx_path_list_clear(path_lh);
     trx_db_list_clear(db_lh);
     *list_size = (uint32_t)tmp_list_size;
     return res;

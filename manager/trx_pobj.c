@@ -27,17 +27,11 @@ trx_pobj *trx_pobj_init(void)
 void trx_pobj_clear(trx_pobj *pobj)
 {
     if(pobj) {
-        DMSG("\n\nDEBUG");
         free(pobj->id);
-        DMSG("\n\nDEBUG");
         free(pobj->ree_basename);
-        DMSG("\n\nDEBUG");
         free(pobj->data);
-        DMSG("\n\nDEBUG");
     }
-    DMSG("\n\nDEBUG");
     free(pobj);
-    DMSG("\n\nDEBUG");
 }
 
 int trx_pobj_save(trx_pobj *pobj)
@@ -47,46 +41,33 @@ int trx_pobj_save(trx_pobj *pobj)
     char *ree_path;
     size_t ree_path_size;
 
-    DMSG("\n\nDEBUG");
-
-    DMSG("\n\nDEBUG:\'%s\'", pobj->ree_basename);
-    DMSG("\n\nDEBUG:\'%s\'", pobj->db->ree_dirname);
-    DMSG("\n\nDEBUG:\'%s\'", pobj->ree_basename);
     if((ree_path_size = snprintf(NULL, 0, "%s/%s", pobj->db->ree_dirname, pobj->ree_basename) + 1) < 1) {
         return 1;
     }
-    DMSG("\n\nDEBUG");
     if(!(ree_path = malloc(ree_path_size))) {
         return 1;
     }
-    DMSG("\n\nDEBUG");
     if(ree_path_size != ((size_t)snprintf(ree_path, ree_path_size, "%s/%s", pobj->db->ree_dirname, pobj->ree_basename) + 1)) {
         free(ree_path);
         return 1;
     }
-    DMSG("\n\nDEBUG");
     res = ree_fs_api_create(ree_path, ree_path_size, &fd);
     if(res != TEE_SUCCESS) {
         free(ree_path);
         return 1;
     }
-    DMSG("\n\nDEBUG");
     free(ree_path);
-    DMSG("\n\nDEBUG");
     res = ree_fs_api_write(fd, 0, &(pobj->data_size), sizeof(size_t));
     if(res != TEE_SUCCESS) {
         ree_fs_api_close(fd);
         return 1;
     }
-    DMSG("\n\nDEBUG");
     res = ree_fs_api_write(fd, sizeof(size_t), pobj->data, pobj->data_size);
     if(res != TEE_SUCCESS) {
         ree_fs_api_close(fd);
         return 1;
     }
-    DMSG("\n\nDEBUG");
     ree_fs_api_close(fd);
-    DMSG("\n\nDEBUG");
     return 0;
 }
 
@@ -99,53 +80,41 @@ int trx_pobj_load(trx_pobj *pobj)
     size_t ree_path_size;
 
 
-    DMSG("\nDEBUG");
     if((ree_path_size = snprintf(NULL, 0, "%s/%s", pobj->db->ree_dirname, pobj->ree_basename) + 1) < 1) {
         return 1;
     }
-    DMSG("\nDEBUG");
     if(!(ree_path = malloc(ree_path_size))) {
         return 1;
     }
-    DMSG("\nDEBUG");
     if(ree_path_size != ((size_t)snprintf(ree_path, ree_path_size, "%s/%s", pobj->db->ree_dirname, pobj->ree_basename) + 1)) {
         free(ree_path);
         return 1;
     }
-    DMSG("\nDEBUG: \'%s\'", ree_path);
     res = ree_fs_api_open(ree_path, ree_path_size, &fd);
     if(res != TEE_SUCCESS) {
         return 1;
     }
-    DMSG("\nDEBUG");
     free(ree_path);
-    DMSG("\nDEBUG");
 
     tmp_size = sizeof(size_t);
-    DMSG("\nDEBUG");
     res = ree_fs_api_read(fd, 0, &(pobj->data_size), &tmp_size);
     if((res != TEE_SUCCESS) || (tmp_size != sizeof(size_t))) {
         ree_fs_api_close(fd);
         return 1;
     }
-    DMSG("\nDEBUG");
 
     if(!(pobj->data = malloc(pobj->data_size))){
         ree_fs_api_close(fd);
         return 1;
     }
-    DMSG("\nDEBUG");
 
     tmp_size = pobj->data_size;
     res = ree_fs_api_read(fd, sizeof(size_t), pobj->data, &tmp_size);
-    DMSG("\nDEBUG");
     if((res != TEE_SUCCESS) || (tmp_size != pobj->data_size)) {
         ree_fs_api_close(fd);
         return 1;
     }
-    DMSG("\nDEBUG");
     ree_fs_api_close(fd);
-    DMSG("\nDEBUG");
     return 0;
 }
 
@@ -220,18 +189,15 @@ int trx_pobj_set_str(char *s, size_t n, trx_pobj *pobj)
 
     result = 0;
 
-    DMSG("\n\nDEBUG");
     status = strlen("[");
     if(strncmp(s, "[", status) != 0) {
         return 0;
     }
     clip_sub(&result, status, &left, n);
-    DMSG("\n\nDEBUG");
     if((pobj->id_size = strtoul(s + result, NULL, 0)) == 0) {
         return 0;
     }
     status = snprintf(NULL, 0, "%zu", pobj->id_size);
-    DMSG("\n\nDEBUG");
     clip_sub(&result, status, &left, n);
     if((pobj->id = (void *)malloc(pobj->id_size)) == NULL) {
         return 0;
@@ -241,7 +207,6 @@ int trx_pobj_set_str(char *s, size_t n, trx_pobj *pobj)
         return 0;
     }
     clip_sub(&result, status, &left, n);
-    DMSG("\n\nDEBUG");
     if((pobj->id = strndup(s + result, pobj->id_size - 1)) == NULL){
         return 0;
     }
@@ -252,48 +217,39 @@ int trx_pobj_set_str(char *s, size_t n, trx_pobj *pobj)
         return 0;
     }
     clip_sub(&result, status, &left, n);
-    DMSG("\n\nDEBUG");
     if((pobj->ree_basename_size = strtoul(s + result, NULL, 0)) == 0) {
         return 0;
     }
     status = snprintf(NULL, 0, "%zu", pobj->ree_basename_size);
     clip_sub(&result, status, &left, n);
-    DMSG("\n\nDEBUG");
     if((pobj->ree_basename = (void *)malloc(pobj->ree_basename_size)) == NULL) {
         return 0;
     }
-    DMSG("\n\nDEBUG");
     status = strlen(", ");
     if(strncmp(s + result, ", ", status) != 0) {
         return 0;
     }
     clip_sub(&result, status, &left, n);
-    DMSG("\n\nDEBUG");
     if((pobj->ree_basename = strndup(s + result, pobj->ree_basename_size - 1)) == NULL){
         return 0;
     }
-    DMSG("\npobj->ree_basename: \'%s\'", pobj->ree_basename);
     status = strlen(pobj->ree_basename);
     clip_sub(&result, status, &left, n);
 
-    DMSG("\n\nDEBUG");
     status = strlen(", ");
     if(strncmp(s + result, ", ", status) != 0) {
         return 0;
     }
     clip_sub(&result, status, &left, n);
-    DMSG("\n\nDEBUG");
     if((pobj->data_size = strtoul(s + result, NULL, 0)) == 0) {
         return 0;
     }
     status = snprintf(NULL, 0, "%10zu", pobj->data_size);
-    DMSG("\n\nDEBUG");
     clip_sub(&result, status, &left, n);
     status = strlen("]");
     if(strncmp(s + result, "]", status) != 0) {
         return 0;
     }
-    DMSG("\n\nDEBUG");
     return (int)result + status;
 }
 
@@ -312,17 +268,11 @@ pobj_list_head *trx_pobj_list_init(void)
 void trx_pobj_list_clear(pobj_list_head *h)
 {
     pobj_entry *e;
-    DMSG("\n\nDEBUG");
     while (!SLIST_EMPTY(h)) {
-        DMSG("\n\nDEBUG");
         e = SLIST_FIRST(h);
-        DMSG("\n\nDEBUG");
         SLIST_REMOVE_HEAD(h, _pobj_entries);
-        DMSG("\n\nDEBUG");
         trx_pobj_clear(e->pobj);
-        DMSG("\n\nDEBUG");
         free(e);
-        DMSG("\n\nDEBUG");
     }
     free(h);
 }

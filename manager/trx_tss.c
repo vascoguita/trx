@@ -26,15 +26,10 @@ trx_tss *trx_tss_init(void)
 
 void trx_tss_clear(trx_tss *tss)
 {
-    DMSG("\n\nHELLO");
     if (tss) {
-        DMSG("\n\nHELLO");
         free(tss->uuid);
-        DMSG("\n\nHELLO");
         trx_pobj_list_clear(tss->pobj_lh);
-        DMSG("\n\nHELLO");
     }
-    DMSG("\n\nHELLO");
     free(tss);
 }
 
@@ -81,40 +76,33 @@ int trx_tss_set_str(char *s, size_t n, trx_tss *tss)
 
     result = 0;
 
-    DMSG("\n\nDEBUG");
     status = strlen("[");
     if(strncmp(s, "[", status) != 0) {
         return 0;
     }
-    DMSG("\n\nDEBUG");
     clip_sub(&result, status, &left, n);
     status = snprintf(uuid_tmp_str, 37, "%s", s + result);
     if (status < 0) {
         return 0;
     }
-    DMSG("\n\nDEBUG: uuid_tmp_str: \'%s\'", uuid_tmp_str);
     status = 37 - 1;
     clip_sub(&result, status, &left, n);
     if(tee_uuid_from_str(tss->uuid, uuid_tmp_str) != TEE_SUCCESS) {
         return 0;
     }
-    DMSG("\n\nDEBUG");
     status = strlen(", ");
     if(strncmp(s + result, ", ", status) != 0) {
         return 0;
     }
-    DMSG("\n\nDEBUG");
     clip_sub(&result, status, &left, n);
     if((status = trx_pobj_list_set_str(s + result, left, tss->pobj_lh)) == 0) {
         return 0;
     }
-    DMSG("\n\nDEBUG");
     clip_sub(&result, status, &left, n);
     status = strlen("]");
     if(strncmp(s + result, "]", status) != 0) {
         return 0;
     }
-    DMSG("\n\nDEBUG");
 
     return (int)result + status;
 }
@@ -132,18 +120,12 @@ tss_list_head *trx_tss_list_init(void)
 void trx_tss_list_clear(tss_list_head *h)
 {
     tss_entry *e;
-    DMSG("\n\nHELLO");
     while (!SLIST_EMPTY(h)) {
-        DMSG("\n\nHELLO");
         e = SLIST_FIRST(h);
         SLIST_REMOVE_HEAD(h, _tss_entries);
-        DMSG("\n\nHELLO");
         trx_tss_clear(e->tss);
-        DMSG("\n\nHELLO");
         free(e);
-        DMSG("\n\nHELLO");
     }
-    DMSG("\n\nHELLO");
     free(h);
 }
 
@@ -227,44 +209,34 @@ int trx_tss_list_set_str(char *s, size_t n, tss_list_head *h)
 
     result = 0;
 
-    DMSG("\n\nDEBUG");
     status = strlen("[");
     if(strncmp(s, "[", status) != 0) {
         return 0;
     }
     clip_sub(&result, status, &left, n);
-    DMSG("\n\nDEBUG");
     tss_list_len = strtoul(s + result, NULL, 0);
     status = snprintf(NULL, 0, "%zu", tss_list_len);
-    DMSG("\n\nDEBUG");
     clip_sub(&result, status, &left, n);
     status = strlen(", ");
     if(strncmp(s + result, ", ", status) != 0) {
         return 0;
     }
-    DMSG("\n\nDEBUG");
     clip_sub(&result, status, &left, n);
     for(i = 0; i < tss_list_len; i++) {
-        DMSG("\n\nDEBUG");
         if(!(tss = trx_tss_init())) {
             return 0;
         }
-        DMSG("\n\nDEBUG");
         if((status = trx_tss_set_str(s + result, left, tss)) == 0) {
             return 0;
         }
-        DMSG("\n\nDEBUG");
         clip_sub(&result, status, &left, n);
         if(trx_tss_list_add(tss, h) != 0) {
             return 0;
         }
-        DMSG("\n\nDEBUG");
     }
-    DMSG("\n\nDEBUG");
     status = strlen("]");
     if(strncmp(s + result, "]", status) != 0) {
         return 0;
     }
-    DMSG("\n\nDEBUG");
     return (int)result + status;
 }

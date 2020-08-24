@@ -1,5 +1,6 @@
 #include "trx_db.h"
 #include "trx_tss.h"
+#include "trx_path.h"
 #include "utils.h"
 #include "trx_manager_ta.h"
 #include "trx_manager_defaults.h"
@@ -592,7 +593,7 @@ trx_db *trx_db_list_get(char *mount_point, size_t mount_point_size, db_list_head
     return NULL;
 }
 
-int trx_db_list_path_snprint(char *s, size_t n, TEE_UUID *uuid, db_list_head *h)
+/*int trx_db_list_path_snprint(char *s, size_t n, TEE_UUID *uuid, db_list_head *h)
 {
     db_entry *db_e;
     trx_tss *tss;
@@ -679,4 +680,42 @@ int trx_db_list_path_snprint(char *s, size_t n, TEE_UUID *uuid, db_list_head *h)
         free(path_counter_str);
     }
     return (int)result + status;
+}*/
+
+int trx_db_list_to_path_list(struct _path_list_head *path_lh, TEE_UUID *uuid, db_list_head *db_lh) {
+    db_entry *db_e;
+    trx_tss *tss;
+    pobj_entry *pobj_e;
+    struct _trx_path *path;
+
+    SLIST_FOREACH(db_e, db_lh, _db_entries) {
+        if(trx_db_load(db_e->db) != 0) {
+            return 1;
+        }
+        if((tss = trx_tss_list_get(uuid, db_e->db->tss_lh))){
+            SLIST_FOREACH(pobj_e, tss->pobj_lh, _pobj_entries) {
+                if(!(path = trx_path_init())) {
+                    return 1;
+                }
+                if((path->path_size = snprintf(NULL, 0, "%s/%s", db_e->db->mount_point, pobj_e->pobj->id) + 1) < 1){
+                    trx_path_clear(path);
+                    return 1;
+                }
+                if(!(path->path = malloc(path->path_size))) {
+                    trx_path_clear(path);
+                    return 1;
+                }
+                if(path->path_size != (size_t)(snprintf(path->path, path->path_size, "%s/%s", db_e->db->mount_point, pobj_e->pobj->id) + 1)){
+                    trx_path_clear(path);
+                    return 1;
+                }
+                path->data_size = pobj_e->pobj->data_size;
+                if(trx_path_list_add(path, path_lh) != 0) {
+                    trx_path_clear(path);
+                    return 1;
+                }
+            }
+        }
+    }
+    return 0;
 }

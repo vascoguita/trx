@@ -27,6 +27,50 @@ void trx_path_clear(trx_path *path)
     free(path);
 }
 
+int trx_path_snprint(char *s, size_t n, trx_path *path)
+{
+    size_t result, left;
+    int status;
+
+    result = 0;
+
+    status = snprintf(s, n, "[");
+    if (status < 0) {
+        return status;
+    }
+    clip_sub(&result, status, &left, n);
+    status = snprintf(s + result, left, "%zu", path->path_size);
+    if (status < 0) {
+        return status;
+    }
+    clip_sub(&result, status, &left, n);
+    status = snprintf(s + result, left, ", ");
+    if (status < 0) {
+        return status;
+    }
+    clip_sub(&result, status, &left, n);
+    status = snprintf(s + result, left, "%s", path->path);
+    if (status < 0) {
+        return status;
+    }
+    clip_sub(&result, status, &left, n);
+    status = snprintf(s + result, left, ", ");
+    if (status < 0) {
+        return status;
+    }
+    clip_sub(&result, status, &left, n);
+    status = snprintf(s + result, left, "%zu", path->data_size);
+    if (status < 0) {
+        return status;
+    }
+    clip_sub(&result, status, &left, n);
+    status = snprintf(s + result, left, "]");
+    if (status < 0) {
+        return status;
+    }
+    return (int)result + status;
+}
+
 int trx_path_set_str(char *s, size_t n, trx_path *path)
 {
     size_t result, left;
@@ -34,8 +78,8 @@ int trx_path_set_str(char *s, size_t n, trx_path *path)
 
     result = 0;
 
-    status = strlen(", ");
-    if(strncmp(s, ", ", status) != 0) {
+    status = strlen("[");
+    if(strncmp(s, "[", status) != 0) {
         return 0;
     }
     clip_sub(&result, status, &left, n);
@@ -66,6 +110,11 @@ int trx_path_set_str(char *s, size_t n, trx_path *path)
         return 0;
     }
     status = snprintf(NULL, 0, "%zu", path->data_size);
+    clip_sub(&result, status, &left, n);
+    status = strlen("]");
+    if(strncmp(s + result, "]", status) != 0) {
+        return 0;
+    }
     return (int)result + status;
 }
 
@@ -116,6 +165,42 @@ int trx_path_list_add(trx_path *path, path_list_head *h)
     return 0;
 }
 
+int trx_path_list_snprint(char *s, size_t n, path_list_head *h) {
+    path_entry *e;
+    size_t result, left;
+    int status;
+
+    result = 0;
+
+    status = snprintf(s, n, "[");
+    if (status < 0) {
+        return status;
+    }
+    clip_sub(&result, status, &left, n);
+    status = snprintf(s + result, left, "%zu", trx_path_list_len(h));
+    if (status < 0) {
+        return status;
+    }
+    clip_sub(&result, status, &left, n);
+    status = snprintf(s + result, left, ", ");
+    if (status < 0) {
+        return status;
+    }
+    clip_sub(&result, status, &left, n);
+    SLIST_FOREACH(e, h, _path_entries) {
+        status = trx_path_snprint(s + result, left, e->path);
+        if (status < 0) {
+            return status;
+        }
+        clip_sub(&result, status, &left, n);
+    }
+    status = snprintf(s + result, left, "]");
+    if (status < 0) {
+        return status;
+    }
+    return (int)result + status;
+}
+
 int trx_path_list_set_str(char *s, size_t n, path_list_head *h) {
     size_t result, left;
     int status;
@@ -132,7 +217,12 @@ int trx_path_list_set_str(char *s, size_t n, path_list_head *h) {
     if ((path_list_len = strtoul(s + result, NULL, 0)) == 0) {
         return 0;
     }
-    status = snprintf(NULL, 0, "%10zu", path_list_len);
+    status = snprintf(NULL, 0, "%zu", path_list_len);
+    clip_sub(&result, status, &left, n);
+    status = strlen(", ");
+    if(strncmp(s + result, ", ", status) != 0) {
+        return 0;
+    }
     clip_sub(&result, status, &left, n);
     for (i = 0; i < path_list_len; i++) {
         if (!(path = trx_path_init())) {
@@ -150,6 +240,5 @@ int trx_path_list_set_str(char *s, size_t n, path_list_head *h) {
     if (strncmp(s + result, "]", status) != 0) {
         return 0;
     }
-
     return (int) result + status;
 }

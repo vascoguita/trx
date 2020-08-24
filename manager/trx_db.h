@@ -5,9 +5,12 @@
 #include <sys/queue.h>
 #include "trx_tss.h"
 #include "trx_pobj.h"
+#include "trx_path.h"
 
+struct _path_list_head;
 struct _tss_list_head;
 struct _trx_pobj;
+struct _trx_path;
 
 typedef struct _trx_db {
     struct _tss_list_head *tss_lh;
@@ -44,8 +47,8 @@ TEE_Result trx_db_list_save(db_list_head *h);
 TEE_Result trx_db_list_load(db_list_head *h);
 int trx_db_list_snprint(char *s, size_t n, db_list_head *h);
 int trx_db_list_set_str(char *s, size_t n, db_list_head *h);
-int trx_db_list_path_snprint(char *s, size_t n, TEE_UUID *uuid, db_list_head *h);
-
+//int trx_db_list_path_snprint(char *s, size_t n, TEE_UUID *uuid, db_list_head *h);
+int trx_db_list_to_path_list(struct _path_list_head *path_lh, TEE_UUID *uuid, db_list_head *db_lh);
 
 struct _trx_pobj *trx_db_list_insert_pobj(TEE_UUID *uuid, char *path, size_t path_size, db_list_head *h);
 struct _trx_pobj *trx_db_list_get_pobj(TEE_UUID *uuid, char *path, size_t path_size, db_list_head *h);

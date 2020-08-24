@@ -55,6 +55,7 @@ TEE_Result TA_OpenSessionEntryPoint(uint32_t param_types, TEE_Param params[4], v
         DMSG("trx_list failed with code 0x%x", res);
         return TEE_ERROR_GENERIC;
     }
+
     res = trx_list(lh);
     if (res != TEE_SUCCESS) {
         DMSG("trx_list failed with code 0x%x", res);
