@@ -261,10 +261,68 @@ TEE_Result list(void *sess_ctx, uint32_t param_types, TEE_Param params[4]) {
 
 TEE_Result mount(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
 {
+    uint32_t exp_param_types;
+    char *ree_dirname, *mount_point;
+    size_t ree_dirname_size, mount_point_size;
+    trx_db *db;
+    db_list_head *db_lh;
+    TEE_Result res;
     (void)&sess_ctx;
-    (void)&param_types;
-    (void)&params;
-    return TEE_SUCCESS;
+
+    DMSG("has been called");
+
+    exp_param_types = TEE_PARAM_TYPES(TEE_PARAM_TYPE_MEMREF_INPUT, TEE_PARAM_TYPE_MEMREF_INPUT,
+                                      TEE_PARAM_TYPE_NONE, TEE_PARAM_TYPE_NONE);
+    if(param_types != exp_param_types) {
+        return TEE_ERROR_BAD_PARAMETERS;
+    }
+
+    ree_dirname = params[0].memref.buffer;
+    ree_dirname_size = (size_t)params[0].memref.size;
+    mount_point = params[1].memref.buffer;
+    mount_point_size = (size_t)params[1].memref.size;
+
+    if(!(db = trx_db_init())){
+        EMSG("TA_TRX_MANAGER_CMD_SETUP failed calling function \'trx_db_init\'");
+        return TEE_ERROR_GENERIC;
+    }
+    if(!(db->mount_point = strndup(mount_point, mount_point_size))){
+        EMSG("TA_TRX_MANAGER_CMD_SETUP failed calling function \'strdup\'");
+        trx_db_clear(db);
+        return TEE_ERROR_GENERIC;
+    }
+    db->mount_point_size = mount_point_size;
+    db->ree_dirname = strndup(ree_dirname, ree_dirname_size);
+    db->ree_dirname_size = ree_dirname_size;
+    if(trx_db_load(db) != 0){
+        EMSG("TA_TRX_MANAGER_CMD_SETUP failed calling function \'trx_db_save\'");
+        trx_db_clear(db);
+        return TEE_ERROR_GENERIC;
+    }
+    if(!(db_lh = trx_db_list_init())){
+        EMSG("TA_TRX_MANAGER_CMD_SETUP failed calling function \'trx_db_list_init\'");
+        trx_db_clear(db);
+        return TEE_ERROR_GENERIC;
+    }
+    if(trx_db_list_load(db_lh) != TEE_SUCCESS) {
+        EMSG("TA_TRX_MANAGER_CMD_LIST failed calling function \'trx_db_list_load\'");
+        trx_db_list_clear(db_lh);
+        return TEE_ERROR_GENERIC;
+    }
+    if(trx_db_list_add(db, db_lh) != 0) {
+        EMSG("TA_TRX_MANAGER_CMD_SETUP failed calling function \'trx_db_list_add\'");
+        trx_db_clear(db);
+        trx_db_list_clear(db_lh);
+        return TEE_ERROR_GENERIC;
+    }
+    res = trx_db_list_save(db_lh);
+    if(res != TEE_SUCCESS){
+        EMSG("TA_TRX_MANAGER_CMD_SETUP failed calling function \'trx_db_list_save\'");
+        trx_db_list_clear(db_lh);
+        return TEE_ERROR_GENERIC;
+    }
+    trx_db_list_clear(db_lh);
+    return res;
 }
 
 TEE_Result share(void *sess_ctx, uint32_t param_types, TEE_Param params[4])

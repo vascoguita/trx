@@ -77,6 +77,38 @@ TEE_Result TA_OpenSessionEntryPoint(uint32_t param_types, TEE_Param params[4], v
     }
     trx_path_list_clear(lh);
 
+    res = trx_mount("trx", strlen("trx") + 1, "mnt", strlen("mnt") + 1);
+    if(res != TEE_SUCCESS) {
+        DMSG("trx_mount failed with code 0x%x", res);
+        return TEE_ERROR_GENERIC;
+    }
+
+    if(!(lh = trx_path_list_init())) {
+        DMSG("trx_list failed with code 0x%x", res);
+        return TEE_ERROR_GENERIC;
+    }
+
+    res = trx_list(lh);
+    if (res != TEE_SUCCESS) {
+        DMSG("trx_list failed with code 0x%x", res);
+        trx_path_list_clear(lh);
+        return TEE_ERROR_GENERIC;
+    }
+    SLIST_FOREACH(e, lh, _path_entries) {
+        read_data_size = e->path->data_size;
+        read_data = malloc(read_data_size);
+        res = trx_read(e->path->path, e->path->path_size, read_data, &read_data_size);
+        if (res != TEE_SUCCESS) {
+            DMSG("trx_read failed with code 0x%x", res);
+            free(read_data);
+            trx_path_list_clear(lh);
+            return TEE_ERROR_GENERIC;
+        }
+        DMSG("trx_read returned:\nread_data:%s\nread_data_size:%zu", (char *) read_data, read_data_size);
+        free(read_data);
+    }
+    trx_path_list_clear(lh);
+
 	return res;
 }
 
