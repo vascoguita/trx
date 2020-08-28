@@ -4,5 +4,6 @@ CPPFLAGS += -DCFG_TEE_TA_LOG_LEVEL=$(CFG_TEE_TA_LOG_LEVEL)
 BINARY = 778e21af-319e-4722-a859-c2e59a14915b
 
 LDADD += $(TA_DEV_KIT_DIR)/lib/trx.a
+LDADD += $(TA_DEV_KIT_DIR)/lib/tui.a
 
 include $(TA_DEV_KIT_DIR)/mk/ta_dev_kit.mk

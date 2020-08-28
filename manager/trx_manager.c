@@ -182,15 +182,17 @@ TEE_Result read(void *sess_ctx, uint32_t param_types, TEE_Param params[4]) {
         trx_db_list_clear(db_lh);
         return TEE_ERROR_GENERIC;
     }
-    if(trx_pobj_load(pobj) != 0) {
-        EMSG("TA_TRX_MANAGER_CMD_WRITE failed calling function \'trx_pobj_load\'");
-        trx_db_list_clear(db_lh);
-        return TEE_ERROR_GENERIC;
-    }
-    if(*data_size > (uint32_t)pobj->data_size) {
+    if((*data_size > (uint32_t)pobj->data_size) || (*data_size == 0)) {
         *data_size = (uint32_t)pobj->data_size;
     }
-    memcpy(data, pobj->data, (size_t)*data_size);
+    if(data != NULL) {
+        if(trx_pobj_load(pobj) != 0) {
+            EMSG("TA_TRX_MANAGER_CMD_WRITE failed calling function \'trx_pobj_load\'");
+            trx_db_list_clear(db_lh);
+            return TEE_ERROR_GENERIC;
+        }
+        memcpy(data, pobj->data, (size_t) * data_size);
+    }
     trx_db_list_clear(db_lh);
     return res;
 }
