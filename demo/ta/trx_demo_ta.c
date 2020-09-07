@@ -38,18 +38,6 @@ TEE_Result TA_OpenSessionEntryPoint(uint32_t param_types, TEE_Param params[4], v
 		return TEE_ERROR_BAD_PARAMETERS;
     }
 
-    res = TUI->setup("10.0.2.2", 9000);
-    if(res != TEE_SUCCESS) {
-        EMSG("TUI failed to setup with code 0x%x", res);
-        return res;
-    }
-
-    res = trx_setup("trx", strlen("trx") + 1);
-    if(res != TEE_SUCCESS) {
-        DMSG("trx_setup failed with code 0x%x", res);
-        return TEE_ERROR_GENERIC;
-    }
-
     while(1) {
         res = TUI->input("Enter command: ", input, input_size);
         if(res != TEE_SUCCESS) {

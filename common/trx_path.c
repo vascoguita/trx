@@ -214,9 +214,7 @@ int trx_path_list_set_str(char *s, size_t n, path_list_head *h) {
         return 0;
     }
     clip_sub(&result, status, &left, n);
-    if ((path_list_len = strtoul(s + result, NULL, 0)) == 0) {
-        return 0;
-    }
+    path_list_len = strtoul(s + result, NULL, 0);
     status = snprintf(NULL, 0, "%zu", path_list_len);
     clip_sub(&result, status, &left, n);
     status = strlen(", ");

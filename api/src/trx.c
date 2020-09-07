@@ -101,6 +101,7 @@ TEE_Result trx_list(path_list_head *h) {
     }
     params[0].memref.buffer = list;
     params[0].memref.size = list_size;
+
     res = invoke_trx_manager_cmd(TA_TRX_MANAGER_CMD_LIST, param_types, params);
     if (res != TEE_SUCCESS) {
         EMSG("invoke_trx_manager_cmd failed to invoke command TA_TRX_MANAGER_CMD_LIST with code 0x%x", res);
@@ -112,6 +113,7 @@ TEE_Result trx_list(path_list_head *h) {
         free(list);
         return TEE_ERROR_GENERIC;
     }
+
     free(list);
 
     return res;

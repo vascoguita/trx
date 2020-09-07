@@ -1,10 +1,18 @@
 ROOT							?= $(CURDIR)
+SETUP_ROOT						?= $(ROOT)/setup
 API_ROOT						?= $(ROOT)/api
 MANAGER_ROOT					?= $(ROOT)/manager
 DEMO_ROOT						?= $(ROOT)/demo
 
 .PHONY: all
-all: api
+all: setup
+
+.PHONY: setup
+setup: api
+	$(MAKE) -C $(SETUP_ROOT) \
+		CROSS_COMPILE=$(CROSS_COMPILE) \
+		PLATFORM=$(PLATFORM) \
+		TA_DEV_KIT_DIR=$(TA_DEV_KIT_DIR)
 
 .PHONY: api
 api: manager
@@ -35,7 +43,12 @@ demo:
 		TA_DEV_KIT_DIR=$(TA_DEV_KIT_DIR)
 
 .PHONY: clean
-clean: api_clean manager_clean
+clean: setup_clean api_clean manager_clean
+
+.PHONY: setup_clean
+setup_clean:
+	$(MAKE) -C $(SETUP_ROOT) clean \
+		TA_DEV_KIT_DIR=$(TA_DEV_KIT_DIR)
 
 .PHONY: api_clean
 api_clean:
