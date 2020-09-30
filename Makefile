@@ -5,14 +5,7 @@ MANAGER_ROOT					?= $(ROOT)/manager
 DEMO_ROOT						?= $(ROOT)/demo
 
 .PHONY: all
-all: setup
-
-.PHONY: setup
-setup: api
-	$(MAKE) -C $(SETUP_ROOT) \
-		CROSS_COMPILE=$(CROSS_COMPILE) \
-		PLATFORM=$(PLATFORM) \
-		TA_DEV_KIT_DIR=$(TA_DEV_KIT_DIR)
+all: api
 
 .PHONY: api
 api: manager
@@ -34,6 +27,13 @@ install:
 	mkdir -p $(TA_DEV_KIT_DIR)/include/trx && \
 	cp $(API_ROOT)/include/* $(TA_DEV_KIT_DIR)/include/trx/.
 
+.PHONY: setup
+setup:
+	$(MAKE) -C $(SETUP_ROOT) \
+		CROSS_COMPILE=$(CROSS_COMPILE) \
+		PLATFORM=$(PLATFORM) \
+		TA_DEV_KIT_DIR=$(TA_DEV_KIT_DIR)
+
 .PHONY: demo
 demo:
 	$(MAKE) -C $(DEMO_ROOT) \
@@ -43,12 +43,7 @@ demo:
 		TA_DEV_KIT_DIR=$(TA_DEV_KIT_DIR)
 
 .PHONY: clean
-clean: setup_clean api_clean manager_clean
-
-.PHONY: setup_clean
-setup_clean:
-	$(MAKE) -C $(SETUP_ROOT) clean \
-		TA_DEV_KIT_DIR=$(TA_DEV_KIT_DIR)
+clean: api_clean manager_clean
 
 .PHONY: api_clean
 api_clean:
@@ -64,6 +59,11 @@ manager_clean:
 uninstall:
 	rm -r $(TA_DEV_KIT_DIR)/include/trx; \
 	rm $(TA_DEV_KIT_DIR)/lib/trx.a;
+
+.PHONY: setup_clean
+setup_clean:
+	$(MAKE) -C $(SETUP_ROOT) clean \
+		TA_DEV_KIT_DIR=$(TA_DEV_KIT_DIR)
 
 .PHONY: demo_clean
 demo_clean:
