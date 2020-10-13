@@ -20,8 +20,7 @@ typedef struct _trx_db {
     size_t mount_point_size;
     char *ree_dirname;
     size_t ree_dirname_size;
-    unsigned char bk[BK_SIZE];
-    unsigned char iv[16];
+    TEE_ObjectHandle bk;
 } trx_db;
 
 trx_db *trx_db_init(void);

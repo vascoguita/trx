@@ -21,6 +21,10 @@ trx_db *trx_db_init(void)
         trx_db_clear(db);
         return NULL;
     }
+    if(TEE_AllocateTransientObject(BK_TYPE, BK_BIT_SIZE, &(db->bk)) != TEE_SUCCESS) {
+        trx_db_clear(db);
+        return NULL;
+    }
     db->last_pobj = NULL;
     db->mount_point = NULL;
     db->mount_point_size = 0;
@@ -35,6 +39,7 @@ void trx_db_clear(trx_db *db)
         trx_tss_list_clear(db->tss_lh);
         free(db->mount_point);
         free(db->ree_dirname);
+        TEE_FreeTransientObject(db->bk);
     }
     free(db);
 }
@@ -290,6 +295,11 @@ int trx_db_list_snprint(char *s, size_t n, db_list_head *h) {
     db_entry *e;
     size_t result, left;
     int status;
+    TEE_Result res;
+    uint32_t buffer_size, i;
+    uint8_t buffer[BK_BIT_SIZE / 8];
+
+    buffer_size = BK_BIT_SIZE / 8;
 
     result = 0;
 
@@ -329,7 +339,6 @@ int trx_db_list_snprint(char *s, size_t n, db_list_head *h) {
             return status;
         }
         clip_sub(&result, status, &left, n);
-
         status = snprintf(s + result, left, "%zu", e->db->ree_dirname_size);
         if (status < 0) {
             return status;
@@ -345,7 +354,22 @@ int trx_db_list_snprint(char *s, size_t n, db_list_head *h) {
             return status;
         }
         clip_sub(&result, status, &left, n);
-
+        status = snprintf(s + result, left, ", ");
+        if (status < 0) {
+            return status;
+        }
+        clip_sub(&result, status, &left, n);
+        res = TEE_GetObjectBufferAttribute(e->db->bk, TEE_ATTR_SECRET_VALUE, buffer, &buffer_size);
+        if (res != TEE_SUCCESS) {
+            return status;
+        }
+        for(i = 0; i < buffer_size; i++) {
+            status = snprintf(s + result, left, "%02x ", buffer[i]);
+            if (status < 0) {
+                return status;
+            }
+            clip_sub(&result, status, &left, n);
+        }
     }
     status = snprintf(s + result, left, "]");
     if (status < 0) {
@@ -359,6 +383,12 @@ int trx_db_list_set_str(char *s, size_t n, db_list_head *h) {
     int status;
     size_t db_list_len, i;
     trx_db *db;
+    uint32_t buffer_size, j;
+    uint8_t buffer[BK_BIT_SIZE / 8];
+    TEE_Result res;
+    TEE_Attribute attr = { };
+
+    buffer_size = BK_BIT_SIZE / 8;
 
     result = 0;
 
@@ -417,6 +447,25 @@ int trx_db_list_set_str(char *s, size_t n, db_list_head *h) {
         }
         status = db->ree_dirname_size - 1;
         clip_sub(&result, status, &left, n);
+        status = strlen(", ");
+        if(strncmp(s + result, ", ", status) != 0) {
+            trx_db_clear(db);
+            return 0;
+        }
+        clip_sub(&result, status, &left, n);
+        for(j = 0; j < buffer_size; j++) {
+            buffer[j] = strtoul(s + result, NULL, 16);
+            status = snprintf(NULL, 0, "%02x ", buffer[j]);
+            if (status < 0) {
+                return status;
+            }
+            clip_sub(&result, status, &left, n);
+        }
+        TEE_InitRefAttribute(&attr, TEE_ATTR_SECRET_VALUE, buffer, buffer_size);
+        res = TEE_PopulateTransientObject(db->bk, &attr, 1);
+        if(res != TEE_SUCCESS){
+            return status;
+        }
         if(trx_db_list_add(db, h) != 0) {
             trx_db_clear(db);
             return 0;
@@ -463,7 +512,6 @@ TEE_Result trx_db_list_save(db_list_head *h)
     if (res != TEE_SUCCESS) {
         EMSG("TEE_CreatePersistentObject failed 0x%08x", res);
     }
-
     TEE_Free(id);
     TEE_CloseObject(obj);
     free(db_list_str);

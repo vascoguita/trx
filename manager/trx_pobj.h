@@ -15,6 +15,10 @@ typedef struct _trx_pobj {
     struct _trx_db *db;
     void *data;
     size_t data_size;
+    void *iv;
+    size_t iv_size;
+    void *cipher;
+    size_t cipher_size;
 } trx_pobj;
 
 trx_pobj *trx_pobj_init(void);
@@ -24,6 +28,9 @@ int trx_pobj_load(trx_pobj *pobj);
 
 int trx_pobj_snprint(char *s, size_t n, trx_pobj *pobj);
 int trx_pobj_set_str(char *s, size_t n, trx_pobj *pobj);
+
+TEE_Result trx_pobj_encrypt(trx_pobj *pobj);
+TEE_Result trx_pobj_decrypt(trx_pobj *pobj);
 
 typedef struct _pobj_entry {
     trx_pobj *pobj;
