@@ -40,15 +40,16 @@ TEE_Result setup(void *sess_ctx, uint32_t param_types, TEE_Param params[4]) {
         trx_db_clear(db);
         return TEE_ERROR_GENERIC;
     }
-    res = TEE_GenerateKey(db->bk, BK_BIT_SIZE, NULL, 0);
+    res = TEE_GenerateKey(db->bk, HMACSHA256_KEY_BIT_SIZE, NULL, 0);
     if (res != TEE_SUCCESS) {
-        EMSG("TEE_GenerateKey(%" PRId32 "): %#" PRIx32, BK_BIT_SIZE, res);
+        EMSG("TEE_GenerateKey(%" PRId32 "): %#" PRIx32, HMACSHA256_KEY_BIT_SIZE, res);
         trx_db_clear(db);
         return res;
     }
     db->mount_point_size = strlen(db->mount_point) + 1;
     db->ree_dirname = strndup(ree_dirname, ree_dirname_size);
     db->ree_dirname_size = ree_dirname_size;
+
     if(trx_db_save(db) != 0){
         EMSG("TA_TRX_MANAGER_CMD_SETUP failed calling function \'trx_db_save\'");
         trx_db_clear(db);
@@ -111,11 +112,13 @@ TEE_Result write(void *sess_ctx, uint32_t param_types, TEE_Param params[4]) {
         EMSG("TA_TRX_MANAGER_CMD_WRITE failed calling function \'trx_db_list_init\'");
         return TEE_ERROR_GENERIC;
     }
+
     if(trx_db_list_load(db_lh) != TEE_SUCCESS) {
         EMSG("TA_TRX_MANAGER_CMD_WRITE failed calling function \'trx_db_list_load\'");
         trx_db_list_clear(db_lh);
         return TEE_ERROR_GENERIC;
     }
+
     if((pobj = trx_db_list_get_pobj(uuid, path, path_size, db_lh)) == NULL) {
         if((pobj = trx_db_list_insert_pobj(uuid, path, path_size, db_lh)) == NULL) {
             EMSG("TA_TRX_MANAGER_CMD_WRITE failed calling function \'trx_db_list_insert_pobj\'");
@@ -123,19 +126,22 @@ TEE_Result write(void *sess_ctx, uint32_t param_types, TEE_Param params[4]) {
             return TEE_ERROR_GENERIC;
         }
     }
+
     pobj->data_size = data_size;
     pobj->data = malloc(data_size);
     memcpy(pobj->data, data, data_size);
-    if(trx_db_save(pobj->db) != 0) {
+    if(trx_db_save(pobj->tss->db) != 0) {
         EMSG("TA_TRX_MANAGER_CMD_WRITE failed calling function \'trx_db_save\'");
         trx_db_list_clear(db_lh);
         return TEE_ERROR_GENERIC;
     }
+
     if(trx_pobj_save(pobj) != 0) {
         EMSG("TA_TRX_MANAGER_CMD_WRITE failed calling function \'trx_pobj_save\'");
         trx_db_list_clear(db_lh);
         return TEE_ERROR_GENERIC;
     }
+
     trx_db_list_clear(db_lh);
     return res;
 }

@@ -8,6 +8,7 @@
 #include <ree_fs_api.h>
 #include <utee_defines.h>
 #include "trx_db.h"
+#include "trx_file.h"
 
 trx_pobj *trx_pobj_init(void)
 {
@@ -19,13 +20,9 @@ trx_pobj *trx_pobj_init(void)
     pobj->id_size = 0;
     pobj->ree_basename = NULL;
     pobj->ree_basename_size = 0;
-    pobj->db = NULL;
+    pobj->tss = NULL;
     pobj->data = NULL;
     pobj->data_size = 0;
-    pobj->iv = NULL;
-    pobj->iv_size = 0;
-    pobj->cipher = NULL;
-    pobj->cipher_size = 0;
     return pobj;
 }
 
@@ -35,117 +32,80 @@ void trx_pobj_clear(trx_pobj *pobj)
         free(pobj->id);
         free(pobj->ree_basename);
         free(pobj->data);
-        free(pobj->iv);
-        free(pobj->cipher);
     }
     free(pobj);
 }
 
 int trx_pobj_save(trx_pobj *pobj)
 {
-    int fd;
     TEE_Result res;
+    trx_file *file;
     char *ree_path;
     size_t ree_path_size;
 
-    res = trx_pobj_encrypt(pobj);
-    if(res != TEE_SUCCESS) {
-        return 1;
-    }
-
-    if((ree_path_size = snprintf(NULL, 0, "%s/%s", pobj->db->ree_dirname, pobj->ree_basename) + 1) < 1) {
+    if((ree_path_size = snprintf(NULL, 0, "%s/%s", pobj->tss->db->ree_dirname, pobj->ree_basename) + 1) < 1) {
         return 1;
     }
     if(!(ree_path = malloc(ree_path_size))) {
         return 1;
     }
-    if(ree_path_size != ((size_t)snprintf(ree_path, ree_path_size, "%s/%s", pobj->db->ree_dirname, pobj->ree_basename) + 1)) {
+    if(ree_path_size != ((size_t)snprintf(ree_path, ree_path_size, "%s/%s", pobj->tss->db->ree_dirname, pobj->ree_basename) + 1)) {
         free(ree_path);
         return 1;
     }
-    res = ree_fs_api_create(ree_path, ree_path_size, &fd);
-    if(res != TEE_SUCCESS) {
-        free(ree_path);
+
+    if(!(file = trx_file_init(ree_path, ree_path_size))) {
         return 1;
     }
     free(ree_path);
 
-    res = ree_fs_api_write(fd, 0, pobj->iv, pobj->iv_size);
+    res = trx_file_encrypt(file, pobj);
     if(res != TEE_SUCCESS) {
-        ree_fs_api_close(fd);
+        trx_file_clear(file);
         return 1;
     }
-    res = ree_fs_api_write(fd, pobj->iv_size, &(pobj->cipher_size), sizeof(size_t));
-    if(res != TEE_SUCCESS) {
-        ree_fs_api_close(fd);
+    if(trx_file_save(file)) {
+        trx_file_clear(file);
         return 1;
     }
-    res = ree_fs_api_write(fd, pobj->iv_size + sizeof(size_t), pobj->cipher, pobj->cipher_size);
-    if(res != TEE_SUCCESS) {
-        ree_fs_api_close(fd);
-        return 1;
-    }
-    ree_fs_api_close(fd);
+    trx_file_clear(file);
     return 0;
 }
 
 int trx_pobj_load(trx_pobj *pobj)
 {
-    int fd;
     TEE_Result res;
-    size_t tmp_size;
+    trx_file *file;
     char *ree_path;
     size_t ree_path_size;
 
-    if((ree_path_size = snprintf(NULL, 0, "%s/%s", pobj->db->ree_dirname, pobj->ree_basename) + 1) < 1) {
+    if((ree_path_size = snprintf(NULL, 0, "%s/%s", pobj->tss->db->ree_dirname, pobj->ree_basename) + 1) < 1) {
         return 1;
     }
     if(!(ree_path = malloc(ree_path_size))) {
         return 1;
     }
-    if(ree_path_size != ((size_t)snprintf(ree_path, ree_path_size, "%s/%s", pobj->db->ree_dirname, pobj->ree_basename) + 1)) {
+    if(ree_path_size != ((size_t)snprintf(ree_path, ree_path_size, "%s/%s", pobj->tss->db->ree_dirname, pobj->ree_basename) + 1)) {
         free(ree_path);
         return 1;
     }
-    res = ree_fs_api_open(ree_path, ree_path_size, &fd);
-    if(res != TEE_SUCCESS) {
+
+    if(!(file = trx_file_init(ree_path, ree_path_size))) {
         return 1;
     }
     free(ree_path);
-    pobj->iv_size = IV_SIZE;
-    if(!(pobj->iv = malloc(pobj->iv_size))) {
-        ree_fs_api_close(fd);
-        return 1;
-    }
-    tmp_size = pobj->iv_size;
-    res = ree_fs_api_read(fd, 0, pobj->iv, &tmp_size);
-    if((res != TEE_SUCCESS) || (tmp_size != pobj->iv_size)) {
-        ree_fs_api_close(fd);
+
+    if(trx_file_load(file)) {
+        trx_file_clear(file);
         return 1;
     }
 
-    tmp_size = sizeof(size_t);
-    res = ree_fs_api_read(fd, pobj->iv_size, &(pobj->cipher_size), &tmp_size);
-    if((res != TEE_SUCCESS) || (tmp_size != sizeof(size_t))) {
-        ree_fs_api_close(fd);
-        return 1;
-    }
-    if(!(pobj->cipher = malloc(pobj->cipher_size))){
-        ree_fs_api_close(fd);
-        return 1;
-    }
-    tmp_size = pobj->cipher_size;
-    res = ree_fs_api_read(fd, pobj->iv_size + sizeof(size_t), pobj->cipher, &tmp_size);
-    if((res != TEE_SUCCESS) || (tmp_size != pobj->cipher_size)) {
-        ree_fs_api_close(fd);
-        return 1;
-    }
-    ree_fs_api_close(fd);
-
-    res = trx_pobj_decrypt(pobj);
+    res = trx_file_decrypt(file, pobj);
     if(res != TEE_SUCCESS) {
+        trx_file_clear(file);
         return 1;
     }
+    trx_file_clear(file);
     return 0;
 }
 
@@ -282,95 +242,6 @@ int trx_pobj_set_str(char *s, size_t n, trx_pobj *pobj)
         return 0;
     }
     return (int)result + status;
-}
-
-TEE_Result trx_pobj_encrypt(trx_pobj *pobj) {
-    TEE_Result res;
-    TEE_OperationHandle op_handle;
-    uint32_t tmp_size;
-
-    pobj->cipher_size = 0;
-    free(pobj->cipher);
-
-    if(pad(pobj->data, pobj->data_size, TEE_AES_BLOCK_SIZE, NULL, &pobj->cipher_size) != 0) {
-        return TEE_ERROR_GENERIC;
-    }
-    if(!(pobj->cipher = malloc(pobj->cipher_size))) {
-        return TEE_ERROR_GENERIC;
-    }
-    if(pad(pobj->data, pobj->data_size, TEE_AES_BLOCK_SIZE, pobj->cipher, &pobj->cipher_size) != 0) {
-        return TEE_ERROR_GENERIC;
-    }
-
-    pobj->iv_size = IV_SIZE;
-    if(!(pobj->iv = malloc(pobj->iv_size))){
-        return TEE_ERROR_GENERIC;
-    }
-    TEE_GenerateRandom(pobj->iv, pobj->iv_size);
-
-    res = TEE_AllocateOperation(&op_handle, TEE_ALG_AES_CBC_NOPAD, TEE_MODE_ENCRYPT, BK_BIT_SIZE);
-    if(res != TEE_SUCCESS) {
-        return res;
-    }
-    res = TEE_SetOperationKey(op_handle, pobj->db->bk);
-    if (res != TEE_SUCCESS) {
-        TEE_FreeOperation(op_handle);
-        return res;
-    }
-
-    TEE_CipherInit(op_handle, pobj->iv, pobj->iv_size);
-
-    tmp_size = pobj->cipher_size;
-    res = TEE_CipherUpdate(op_handle, pobj->cipher, pobj->cipher_size, pobj->cipher, &tmp_size);
-    if((res != TEE_SUCCESS) || (tmp_size != pobj->cipher_size)) {
-        TEE_FreeOperation(op_handle);
-        return res;
-    }
-
-    TEE_FreeOperation(op_handle);
-    return res;
-}
-
-TEE_Result trx_pobj_decrypt(trx_pobj *pobj) {
-    TEE_Result res;
-    TEE_OperationHandle op_handle;
-    uint32_t tmp_size;
-
-    res = TEE_AllocateOperation(&op_handle, TEE_ALG_AES_CBC_NOPAD, TEE_MODE_DECRYPT, BK_BIT_SIZE);
-    if(res != TEE_SUCCESS) {
-        return res;
-    }
-
-    res = TEE_SetOperationKey(op_handle, pobj->db->bk);
-    if (res != TEE_SUCCESS) {
-        TEE_FreeOperation(op_handle);
-        return res;
-    }
-
-    TEE_CipherInit(op_handle, pobj->iv, pobj->iv_size);
-
-    tmp_size = pobj->cipher_size;
-    res = TEE_CipherUpdate(op_handle, pobj->cipher, pobj->cipher_size, pobj->cipher, &tmp_size);
-    if((res != TEE_SUCCESS) || (tmp_size != pobj->cipher_size)) {
-        TEE_FreeOperation(op_handle);
-        return res;
-    }
-    TEE_FreeOperation(op_handle);
-
-    pobj->data_size = 0;
-    free(pobj->data);
-
-    if(unpad(pobj->cipher, pobj->cipher_size, TEE_AES_BLOCK_SIZE, NULL, &pobj->data_size) != 0) {
-        return TEE_ERROR_GENERIC;
-    }
-    if(!(pobj->data = malloc(pobj->data_size))) {
-        return TEE_ERROR_GENERIC;
-    }
-    if(unpad(pobj->cipher, pobj->cipher_size, TEE_AES_BLOCK_SIZE, pobj->data, &pobj->data_size) != 0) {
-        return TEE_ERROR_GENERIC;
-    }
-
-    return res;
 }
 
 pobj_list_head *trx_pobj_list_init(void)

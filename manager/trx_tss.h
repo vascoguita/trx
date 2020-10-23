@@ -3,13 +3,16 @@
 
 #include <tee_internal_api.h>
 #include <sys/queue.h>
+#include "trx_db.h"
 #include "trx_pobj.h"
 
 struct _pobj_list_head;
+struct _trx_db;
 
 typedef struct _trx_tss {
     TEE_UUID *uuid;
     struct _pobj_list_head *pobj_lh;
+    struct _trx_db *db;
 } trx_tss;
 
 trx_tss *trx_tss_init(void);

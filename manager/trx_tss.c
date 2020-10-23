@@ -10,13 +10,15 @@
 trx_tss *trx_tss_init(void)
 {
     trx_tss *tss;
-    if((tss = (struct _trx_tss*) malloc(sizeof(struct _trx_tss))) == NULL) {
+
+    if(!(tss = (struct _trx_tss*) malloc(sizeof(struct _trx_tss)))) {
         return NULL;
     }
-    if((tss->uuid = (TEE_UUID*) malloc(sizeof(TEE_UUID))) == NULL) {
+    if(!(tss->uuid = (TEE_UUID*) malloc(sizeof(TEE_UUID)))) {
         trx_tss_clear(tss);
         return NULL;
     }
+
     if(!(tss->pobj_lh = trx_pobj_list_init())){
         trx_tss_clear(tss);
         return NULL;

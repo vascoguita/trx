@@ -21,7 +21,7 @@ trx_db *trx_db_init(void)
         trx_db_clear(db);
         return NULL;
     }
-    if(TEE_AllocateTransientObject(BK_TYPE, BK_BIT_SIZE, &(db->bk)) != TEE_SUCCESS) {
+    if(TEE_AllocateTransientObject(TEE_TYPE_HMAC_SHA256, HMACSHA256_KEY_BIT_SIZE, &(db->bk)) != TEE_SUCCESS) {
         trx_db_clear(db);
         return NULL;
     }
@@ -70,11 +70,12 @@ trx_pobj *trx_db_insert(const TEE_UUID *uuid, const char *id, size_t id_size, tr
     trx_tss *tss;
     trx_pobj *pobj;
 
-    if((tss = trx_tss_list_get(uuid, db->tss_lh)) == NULL) {
+    if(!(tss = trx_tss_list_get(uuid, db->tss_lh))) {
         if(!(tss = trx_tss_init())){
             return NULL;
         }
         memcpy(tss->uuid, uuid, sizeof(TEE_UUID));
+        tss->db = db;
         if(trx_tss_list_add(tss, db->tss_lh) != 0) {
             trx_tss_clear(tss);
             return NULL;
@@ -88,7 +89,7 @@ trx_pobj *trx_db_insert(const TEE_UUID *uuid, const char *id, size_t id_size, tr
         return NULL;
     }
     pobj->ree_basename_size = strlen(pobj->ree_basename) + 1;
-    pobj->db = db;
+    pobj->tss = tss;
     if(!(pobj->id = strndup(id, id_size))){
         trx_pobj_clear(pobj);
         return NULL;
@@ -109,10 +110,11 @@ trx_pobj *trx_db_get(TEE_UUID *uuid, const char *id, size_t id_size, trx_db *db)
     if((tss = trx_tss_list_get(uuid, db->tss_lh)) == NULL) {
         return NULL;
     }
+    tss->db = db;
     if((pobj = trx_pobj_list_get(id, id_size, tss->pobj_lh)) == NULL) {
         return NULL;
     }
-    pobj->db = db;
+    pobj->tss = tss;
     return pobj;
 }
 
@@ -191,58 +193,67 @@ int trx_db_save(trx_db *db)
 {
     TEE_UUID uuid = TA_TRX_MANAGER_UUID;
     trx_pobj *pobj;
-
     if(!(pobj = trx_db_get(&uuid, DEFAULT_DB_ID, strlen(DEFAULT_DB_ID) + 1, db))) {
         if(!(pobj = trx_db_insert(&uuid, DEFAULT_DB_ID, strlen(DEFAULT_DB_ID) + 1, db))) {
             return 1;
         }
     }
-
     if((pobj->data_size = trx_db_snprint(NULL, 0, db) + 1) < 1) {
         return 1;
     }
-
     if((pobj->data = (char *)malloc(pobj->data_size)) == NULL) {
         return 1;
     }
-
     if(pobj->data_size != ((size_t)trx_db_snprint((char *)pobj->data, pobj->data_size, db) + 1)) {
         return 1;
     }
-
     if(trx_pobj_save(pobj) != 0) {
         return 1;
     }
-
     return 0;
 }
 
 int trx_db_load(trx_db *db)
 {
     trx_pobj *pobj;
+    trx_tss *tss;
+    TEE_UUID uuid = TA_TRX_MANAGER_UUID;
+
+    if(!(tss = trx_tss_init())){
+        return 1;
+    }
+    memcpy(tss->uuid, &uuid, sizeof(TEE_UUID));
+    tss->db = db;
 
     if(!(pobj = trx_pobj_init())) {
+        trx_tss_clear(tss);
         return 1;
     }
 
-    pobj->db = db;
+    if(trx_pobj_list_add(pobj, tss->pobj_lh) != 0) {
+        trx_pobj_clear(pobj);
+        trx_tss_clear(tss);
+        return 1;
+    }
+
+    pobj->tss = tss;
 
     if(!(pobj->ree_basename = strdup("0"))){
-        trx_pobj_clear(pobj);
+        trx_tss_clear(tss);
         return 1;
     }
     pobj->ree_basename_size = strlen(pobj->ree_basename) + 1;
 
     if(trx_pobj_load(pobj) != 0) {
-        trx_pobj_clear(pobj);
+        trx_tss_clear(tss);
         return 1;
     }
     if(trx_db_set_str(pobj->data, pobj->data_size, db) == 0) {
-        trx_pobj_clear(pobj);
+        trx_tss_clear(tss);
         return 1;
     }
 
-    trx_pobj_clear(pobj);
+    trx_tss_clear(tss);
     return 0;
 }
 
@@ -297,9 +308,9 @@ int trx_db_list_snprint(char *s, size_t n, db_list_head *h) {
     int status;
     TEE_Result res;
     uint32_t buffer_size, i;
-    uint8_t buffer[BK_BIT_SIZE / 8];
+    uint8_t buffer[HMACSHA256_KEY_SIZE];
 
-    buffer_size = BK_BIT_SIZE / 8;
+    buffer_size = HMACSHA256_KEY_SIZE;
 
     result = 0;
 
@@ -384,11 +395,11 @@ int trx_db_list_set_str(char *s, size_t n, db_list_head *h) {
     size_t db_list_len, i;
     trx_db *db;
     uint32_t buffer_size, j;
-    uint8_t buffer[BK_BIT_SIZE / 8];
+    uint8_t buffer[HMACSHA256_KEY_SIZE];
     TEE_Result res;
     TEE_Attribute attr = { };
 
-    buffer_size = BK_BIT_SIZE / 8;
+    buffer_size = HMACSHA256_KEY_SIZE;
 
     result = 0;
 
@@ -593,8 +604,8 @@ trx_pobj *trx_db_list_insert_pobj(TEE_UUID *uuid, char *path, size_t path_size, 
 
 trx_pobj *trx_db_list_get_pobj(TEE_UUID *uuid, char *path, size_t path_size, db_list_head *h) {
     trx_db *db;
-    char *mount_point, *id, *trx_db_str;
-    size_t mount_point_size, id_size, trx_db_str_size;
+    char *mount_point, *id;
+    size_t mount_point_size, id_size;
     trx_pobj *pobj;
 
     (void)&path_size;
@@ -606,10 +617,6 @@ trx_pobj *trx_db_list_get_pobj(TEE_UUID *uuid, char *path, size_t path_size, db_
     if(!(db = trx_db_list_get(mount_point, mount_point_size, h))) {
         return NULL;
     }
-    trx_db_str_size = trx_db_snprint(NULL, 0, db) + 1;
-    trx_db_str = malloc(trx_db_str_size);
-    trx_db_snprint(trx_db_str, trx_db_str_size, db);
-    free(trx_db_str);
     if(!(id = basename(path))) {
         return NULL;
     }
@@ -617,7 +624,6 @@ trx_pobj *trx_db_list_get_pobj(TEE_UUID *uuid, char *path, size_t path_size, db_
     if(!(pobj = trx_db_get(uuid, id, id_size, db))) {
         return NULL;
     }
-    pobj->db = db;
     return pobj;
 }
 
