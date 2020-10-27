@@ -6,6 +6,9 @@
 
 #define DEFAULT_DB_ID               "db"
 #define DEFAULT_DB_LIST_ID          "db_list"
+#define DEFAULT_IBME_ID             "ibme"
+#define DEFAULT_REE_DIRNAME         "trx"
+#define DEFAULT_REE_DIRNAME_SIZE    4
 #define AES_KEY_BIT_SIZE            256 // 128, 192, or 256 bits
 #define AES_KEY_SIZE                AES_KEY_BIT_SIZE / 8
 #define IV_SIZE                     16

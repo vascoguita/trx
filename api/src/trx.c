@@ -6,17 +6,26 @@
 
 #include <tee_internal_api.h>
 
-TEE_Result trx_setup(const char *ree_dirname, size_t ree_dirname_size) {
+TEE_Result trx_setup(const char *pairing_str, size_t pairing_str_size,
+                     const char *mpk_str, size_t mpk_str_size,
+                     const char *ek_str, size_t ek_str_size,
+                     const char *dk_str, size_t dk_str_size) {
     TEE_Result res;
     uint32_t param_types;
     TEE_Param params[4];
 
-    param_types = TEE_PARAM_TYPES(TEE_PARAM_TYPE_MEMREF_INPUT, TEE_PARAM_TYPE_NONE,
-                                  TEE_PARAM_TYPE_NONE, TEE_PARAM_TYPE_NONE);
+    param_types = TEE_PARAM_TYPES(TEE_PARAM_TYPE_MEMREF_INPUT, TEE_PARAM_TYPE_MEMREF_INPUT,
+                                  TEE_PARAM_TYPE_MEMREF_INPUT, TEE_PARAM_TYPE_MEMREF_INPUT);
 
     TEE_MemFill(params, 0, sizeof(params));
-    params[0].memref.buffer = (char *)ree_dirname;
-    params[0].memref.size = ree_dirname_size;
+    params[0].memref.buffer = (char *)pairing_str;
+    params[0].memref.size = pairing_str_size;
+    params[1].memref.buffer = (char *)mpk_str;
+    params[1].memref.size = mpk_str_size;
+    params[2].memref.buffer = (char *)ek_str;
+    params[2].memref.size = ek_str_size;
+    params[3].memref.buffer = (char *)dk_str;
+    params[3].memref.size = dk_str_size;
 
     res = invoke_trx_manager_cmd(TA_TRX_MANAGER_CMD_SETUP, param_types, params);
     if (res != TEE_SUCCESS) {

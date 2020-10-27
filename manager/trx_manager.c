@@ -10,27 +10,96 @@
 #include "trx_path.h"
 #include "utils.h"
 #include "trx_db.h"
+#include "trx_ibme.h"
 
 TEE_Result setup(void *sess_ctx, uint32_t param_types, TEE_Param params[4]) {
     uint32_t exp_param_types;
-    char *ree_dirname;
-    size_t ree_dirname_size;
+    char *param_str, *mpk_str, *ek_str, *dk_str;
+    size_t param_str_size, mpk_str_size, ek_str_size, dk_str_size;
     trx_db *db;
     db_list_head *db_lh;
+    trx_ibme *ibme;
+    pairing_t pairing;
     TEE_Result res;
 	(void)&sess_ctx;
 
 	DMSG("has been called");
 
-    exp_param_types = TEE_PARAM_TYPES(TEE_PARAM_TYPE_MEMREF_INPUT, TEE_PARAM_TYPE_NONE,
-                                        TEE_PARAM_TYPE_NONE, TEE_PARAM_TYPE_NONE);
+    exp_param_types = TEE_PARAM_TYPES(TEE_PARAM_TYPE_MEMREF_INPUT, TEE_PARAM_TYPE_MEMREF_INPUT,
+                                      TEE_PARAM_TYPE_MEMREF_INPUT, TEE_PARAM_TYPE_MEMREF_INPUT);
 	if(param_types != exp_param_types) {
 		return TEE_ERROR_BAD_PARAMETERS;
     }
 
-    ree_dirname = params[0].memref.buffer;
-    ree_dirname_size = (size_t)params[0].memref.size;
+    param_str = params[0].memref.buffer;
+    param_str_size = (size_t)params[0].memref.size;
+    mpk_str = params[1].memref.buffer;
+    mpk_str_size = (size_t)params[1].memref.size;
+    ek_str = params[2].memref.buffer;
+    ek_str_size = (size_t)params[2].memref.size;
+    dk_str = params[3].memref.buffer;
+    dk_str_size = (size_t)params[3].memref.size;
 
+    if(!(ibme = trx_ibme_init())){
+        EMSG("TA_TRX_MANAGER_CMD_SETUP failed calling function \'trx_ibme_init\'");
+        return TEE_ERROR_GENERIC;
+    }
+    if(!(ibme->param_str = strndup(param_str, param_str_size))){
+        EMSG("TA_TRX_MANAGER_CMD_SETUP failed calling function \'strndup\'");
+        trx_ibme_clear(ibme);
+        return TEE_ERROR_GENERIC;
+    }
+    ibme->param_str_size = param_str_size;
+    if(1 == pairing_init_set_str(pairing, param_str)) {
+        EMSG("TA_TRX_MANAGER_CMD_SETUP failed calling function \'pairing_init_set_str\'");
+        trx_ibme_clear(ibme);
+        return TEE_ERROR_GENERIC;
+    }
+    if(1 == MPK_init(pairing, &(ibme->mpk))){
+        EMSG("TA_TRX_MANAGER_CMD_SETUP failed calling function \'MPK_init\'");
+        pairing_clear(pairing);
+        trx_ibme_clear(ibme);
+        return TEE_ERROR_GENERIC;
+    }
+    if(1 == EK_init(pairing, &(ibme->ek))) {
+        EMSG("TA_TRX_MANAGER_CMD_SETUP failed calling function \'EK_init\'");
+        pairing_clear(pairing);
+        trx_ibme_clear(ibme);
+        return TEE_ERROR_GENERIC;
+    }
+    if(1 == DK_init(pairing, &(ibme->dk))) {
+        EMSG("TA_TRX_MANAGER_CMD_SETUP failed calling function \'DK_init\'");
+        pairing_clear(pairing);
+        trx_ibme_clear(ibme);
+        return TEE_ERROR_GENERIC;
+    }
+    if(0 == MPK_set_str(mpk_str, mpk_str_size, ibme->mpk)){
+        EMSG("TA_TRX_MANAGER_CMD_SETUP failed calling function \'MPK_set_str\'");
+        pairing_clear(pairing);
+        trx_ibme_clear(ibme);
+        return TEE_ERROR_GENERIC;
+    }
+    if(0 == EK_set_str(ek_str, ek_str_size, ibme->ek)){
+        EMSG("TA_TRX_MANAGER_CMD_SETUP failed calling function \'EK_set_str\'");
+        pairing_clear(pairing);
+        trx_ibme_clear(ibme);
+        return TEE_ERROR_GENERIC;
+    }
+    if(0 == DK_set_str(dk_str, dk_str_size, ibme->dk)){
+        EMSG("TA_TRX_MANAGER_CMD_SETUP failed calling function \'DK_set_str\'");
+        pairing_clear(pairing);
+        trx_ibme_clear(ibme);
+        return TEE_ERROR_GENERIC;
+    }
+    res = trx_ibme_save(ibme);
+    if(res != TEE_SUCCESS){
+        EMSG("TA_TRX_MANAGER_CMD_SETUP failed calling function \'trx_ibme_save\'");
+        pairing_clear(pairing);
+        trx_ibme_clear(ibme);
+        return TEE_ERROR_GENERIC;
+    }
+    pairing_clear(pairing);
+    trx_ibme_clear(ibme);
     if(!(db = trx_db_init())){
         EMSG("TA_TRX_MANAGER_CMD_SETUP failed calling function \'trx_db_init\'");
         return TEE_ERROR_GENERIC;
@@ -47,8 +116,8 @@ TEE_Result setup(void *sess_ctx, uint32_t param_types, TEE_Param params[4]) {
         return res;
     }
     db->mount_point_size = strlen(db->mount_point) + 1;
-    db->ree_dirname = strndup(ree_dirname, ree_dirname_size);
-    db->ree_dirname_size = ree_dirname_size;
+    db->ree_dirname = strndup(DEFAULT_REE_DIRNAME, DEFAULT_REE_DIRNAME_SIZE);
+    db->ree_dirname_size = DEFAULT_REE_DIRNAME_SIZE;
 
     if(trx_db_save(db) != 0){
         EMSG("TA_TRX_MANAGER_CMD_SETUP failed calling function \'trx_db_save\'");
@@ -348,5 +417,8 @@ TEE_Result share(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
     (void)&sess_ctx;
     (void)&param_types;
     (void)&params;
+
+
+
     return TEE_SUCCESS;
 }

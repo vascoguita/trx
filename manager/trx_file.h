@@ -3,12 +3,14 @@
 
 #include <tee_internal_api.h>
 #include "trx_pobj.h"
+#include <ibme/cipher.h>
 
 struct _trx_pobj;
 
 typedef struct _trx_file {
     char *ree_path;
     size_t ree_path_size;
+    Cipher *enc_bk;
     void *fek_enc_iv;
     size_t fek_enc_iv_size;
     void *fek_enc;

@@ -7,6 +7,7 @@
 #include <tee_internal_api_extensions.h>
 #include <ree_fs_api.h>
 #include <utee_defines.h>
+#include <ibme/padding.h>
 #include "trx_pobj.h"
 
 trx_file *trx_file_init(const char *ree_path, size_t ree_path_size)
@@ -498,3 +499,4 @@ int trx_file_deserialize(trx_file *file, void *data, size_t data_size) {
 
     return 0;
 }
+
