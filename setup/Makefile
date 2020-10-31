@@ -1,28 +1,28 @@
+CC      ?= $(CROSS_COMPILE)gcc
+LD      ?= $(CROSS_COMPILE)ld
+AR      ?= $(CROSS_COMPILE)ar
+NM      ?= $(CROSS_COMPILE)nm
+OBJCOPY ?= $(CROSS_COMPILE)objcopy
+OBJDUMP ?= $(CROSS_COMPILE)objdump
+READELF ?= $(CROSS_COMPILE)readelf
+
+OBJS = trx_setup.o
+
+CFLAGS += -Wall -I../manager/include -I$(TEEC_EXPORT)/include -I./include
+
+LDADD += -lteec -L$(TEEC_EXPORT)/lib
+
+BINARY = trx_setup
+
 .PHONY: all
-all: host ta
+all: $(BINARY)
 
-.PHONY: host
-host:
-	$(MAKE) -C host \
-		CROSS_COMPILE=$(CROSS_COMPILE) \
-		TEEC_EXPORT=$(TEEC_EXPORT) \
-		--no-builtin-variables
-
-.PHONY: ta
-ta:
-	$(MAKE) -C ta \
-		CROSS_COMPILE=$(CROSS_COMPILE) \
-		PLATFORM=$(PLATFORM) \
-		TA_DEV_KIT_DIR=$(TA_DEV_KIT_DIR)
+$(BINARY): $(OBJS)
+	$(CC) -o $@ $< $(LDADD)
 
 .PHONY: clean
-clean: host-clean ta-clean
+clean:
+	rm -f $(OBJS) $(BINARY)
 
-.PHONY: host-clean
-host-clean:
-	$(MAKE) -C host clean
-
-.PHONY: ta-clean
-ta-clean:
-	$(MAKE) -C ta clean \
-		TA_DEV_KIT_DIR=$(TA_DEV_KIT_DIR)
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@

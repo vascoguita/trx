@@ -31,8 +31,8 @@ install:
 setup:
 	$(MAKE) -C $(SETUP_ROOT) \
 		CROSS_COMPILE=$(CROSS_COMPILE) \
-		PLATFORM=$(PLATFORM) \
-		TA_DEV_KIT_DIR=$(TA_DEV_KIT_DIR)
+		TEEC_EXPORT=$(TEEC_EXPORT) \
+		--no-builtin-variables
 
 .PHONY: demo
 demo:
@@ -62,8 +62,7 @@ uninstall:
 
 .PHONY: setup_clean
 setup_clean:
-	$(MAKE) -C $(SETUP_ROOT) clean \
-		TA_DEV_KIT_DIR=$(TA_DEV_KIT_DIR)
+	$(MAKE) -C $(SETUP_ROOT) clean
 
 .PHONY: demo_clean
 demo_clean:

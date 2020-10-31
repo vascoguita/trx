@@ -6,7 +6,7 @@
 
 #include <tee_internal_api.h>
 
-TEE_Result trx_setup(const char *pairing_str, size_t pairing_str_size,
+TEE_Result trx_setup(const char *param_str, size_t param_str_size,
                      const char *mpk_str, size_t mpk_str_size,
                      const char *ek_str, size_t ek_str_size,
                      const char *dk_str, size_t dk_str_size) {
@@ -18,8 +18,8 @@ TEE_Result trx_setup(const char *pairing_str, size_t pairing_str_size,
                                   TEE_PARAM_TYPE_MEMREF_INPUT, TEE_PARAM_TYPE_MEMREF_INPUT);
 
     TEE_MemFill(params, 0, sizeof(params));
-    params[0].memref.buffer = (char *)pairing_str;
-    params[0].memref.size = pairing_str_size;
+    params[0].memref.buffer = (char *)param_str;
+    params[0].memref.size = param_str_size;
     params[1].memref.buffer = (char *)mpk_str;
     params[1].memref.size = mpk_str_size;
     params[2].memref.buffer = (char *)ek_str;

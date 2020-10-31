@@ -4,7 +4,7 @@
 #include <tee_internal_api.h>
 #include <trx_path.h>
 
-TEE_Result trx_setup(const char *pairing_str, size_t pairing_str_size,
+TEE_Result trx_setup(const char *param_str, size_t param_str_size,
                      const char *mpk_str, size_t mpk_str_size,
                      const char *ek_str, size_t ek_str_size,
                      const char *dk_str, size_t dk_str_size);
