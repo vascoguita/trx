@@ -23,6 +23,8 @@ trx_file *trx_file_init(const char *ree_path, size_t ree_path_size)
     }
     file->ree_path = strndup(ree_path, ree_path_size);
     file->ree_path_size = ree_path_size;
+    file->bk_enc = NULL;
+    file->bk_enc_size = 0;
     file->fek_enc_iv = NULL;
     file->fek_enc_iv_size = 0;
     file->fek_enc = NULL;
@@ -38,6 +40,7 @@ void trx_file_clear(trx_file *file)
 {
     if(file) {
         free(file->ree_path);
+        free(file->bk_enc);
         free(file->fek_enc_iv);
         free(file->fek_enc);
         free(file->data_enc_iv);
@@ -384,8 +387,8 @@ int trx_file_serialize(trx_file *file, void *data, size_t *data_size) {
     if(!file) {
         return 1;
     }
-    tmp_data_size = sizeof(size_t) + file->fek_enc_iv_size + sizeof(size_t) + file->fek_enc_size + sizeof(size_t) +
-                    file->data_enc_iv_size + sizeof(size_t) + file->data_enc_size;
+    tmp_data_size = sizeof(size_t) + file->bk_enc_size + sizeof(size_t) + file->fek_enc_iv_size + sizeof(size_t) +
+            file->fek_enc_size + sizeof(size_t) + file->data_enc_iv_size + sizeof(size_t) + file->data_enc_size;
 
     if(!data && !(*data_size)){
         *data_size = tmp_data_size;
@@ -398,6 +401,10 @@ int trx_file_serialize(trx_file *file, void *data, size_t *data_size) {
 
     cpy_ptr = data;
 
+    memcpy(cpy_ptr, &(file->bk_enc_size), sizeof(size_t));
+    cpy_ptr += sizeof(size_t);
+    memcpy(cpy_ptr, file->bk_enc, file->bk_enc_size);
+    cpy_ptr += file->bk_enc_size;
     memcpy(cpy_ptr, &(file->fek_enc_iv_size), sizeof(size_t));
     cpy_ptr += sizeof(size_t);
     memcpy(cpy_ptr, file->fek_enc_iv, file->fek_enc_iv_size);
@@ -426,6 +433,23 @@ int trx_file_deserialize(trx_file *file, void *data, size_t data_size) {
 
     cpy_ptr = data;
     left = data_size;
+    if(left < sizeof(size_t)) {
+        return 1;
+    }
+    memcpy(&(file->bk_enc_size), cpy_ptr, sizeof(size_t));
+    cpy_ptr += sizeof(size_t);
+    left -= sizeof(size_t);
+
+    if(left < file->bk_enc_size) {
+        return 1;
+    }
+    if(!(file->bk_enc = malloc(file->bk_enc_size))) {
+        return 1;
+    }
+    memcpy(file->bk_enc, cpy_ptr, file->bk_enc_size);
+    cpy_ptr += file->bk_enc_size;
+    left -= file->bk_enc_size;
+
     if(left < sizeof(size_t)) {
         return 1;
     }
@@ -499,4 +523,3 @@ int trx_file_deserialize(trx_file *file, void *data, size_t data_size) {
 
     return 0;
 }
-

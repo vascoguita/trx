@@ -128,7 +128,33 @@ TEE_Result trx_list(path_list_head *h) {
     return res;
 }
 
-TEE_Result trx_mount(const char *ree_dirname, size_t ree_dirname_size, const char *mount_point, size_t mount_point_size)
+TEE_Result trx_mount(const unsigned char *S, size_t S_size, const char *ree_dirname, size_t ree_dirname_size,
+                     const char *mount_point, size_t mount_point_size)
+{
+    TEE_Result res;
+    uint32_t param_types;
+    TEE_Param params[4];
+
+    param_types = TEE_PARAM_TYPES(TEE_PARAM_TYPE_MEMREF_INPUT, TEE_PARAM_TYPE_MEMREF_INPUT,
+                                  TEE_PARAM_TYPE_MEMREF_INPUT, TEE_PARAM_TYPE_NONE);
+
+    TEE_MemFill(params, 0, sizeof(params));
+    params[0].memref.buffer = (unsigned char *)S;
+    params[0].memref.size = S_size;
+    params[1].memref.buffer = (char *)ree_dirname;
+    params[1].memref.size = ree_dirname_size;
+    params[2].memref.buffer = (char *)mount_point;
+    params[2].memref.size = mount_point_size;
+
+    res = invoke_trx_manager_cmd(TA_TRX_MANAGER_CMD_MOUNT, param_types, params);
+    if (res != TEE_SUCCESS) {
+        EMSG("invoke_trx_manager_cmd failed to invoke command TA_TRX_MANAGER_CMD_MOUNT with code 0x%x", res);
+    }
+
+    return res;
+}
+
+TEE_Result trx_share(const unsigned char *R, size_t R_size, const char *mount_point, size_t mount_point_size)
 {
     TEE_Result res;
     uint32_t param_types;
@@ -138,14 +164,14 @@ TEE_Result trx_mount(const char *ree_dirname, size_t ree_dirname_size, const cha
                                   TEE_PARAM_TYPE_NONE, TEE_PARAM_TYPE_NONE);
 
     TEE_MemFill(params, 0, sizeof(params));
-    params[0].memref.buffer = (char *)ree_dirname;
-    params[0].memref.size = ree_dirname_size;
+    params[0].memref.buffer = (unsigned char *)R;
+    params[0].memref.size = R_size;
     params[1].memref.buffer = (char *)mount_point;
     params[1].memref.size = mount_point_size;
 
-    res = invoke_trx_manager_cmd(TA_TRX_MANAGER_CMD_MOUNT, param_types, params);
+    res = invoke_trx_manager_cmd(TA_TRX_MANAGER_CMD_SHARE, param_types, params);
     if (res != TEE_SUCCESS) {
-        EMSG("invoke_trx_manager_cmd failed to invoke command TA_TRX_MANAGER_CMD_SETUP with code 0x%x", res);
+        EMSG("invoke_trx_manager_cmd failed to invoke command TA_TRX_MANAGER_CMD_SHARE with code 0x%x", res);
     }
 
     return res;

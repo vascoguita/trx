@@ -67,9 +67,17 @@ TEE_Result TA_InvokeCommandEntryPoint(void *sess_ctx, uint32_t cmd, uint32_t par
             }
             return list(sess_ctx, param_types, params);
         case TA_TRX_MANAGER_CMD_MOUNT:
+            if(identity.login != TEE_LOGIN_TRUSTED_APP) {
+                EMSG("Access Denied: Only TAs are allowed to use TRX");
+                return TEE_ERROR_GENERIC;
+            }
             return mount(sess_ctx, param_types, params);
         case TA_TRX_MANAGER_CMD_SHARE:
-            return mount(sess_ctx, param_types, params);
+            if(identity.login != TEE_LOGIN_TRUSTED_APP) {
+                EMSG("Access Denied: Only TAs are allowed to use TRX");
+                return TEE_ERROR_GENERIC;
+            }
+            return share(sess_ctx, param_types, params);
         default:
             return TEE_ERROR_NOT_SUPPORTED;
     }

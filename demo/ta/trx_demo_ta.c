@@ -21,8 +21,8 @@ TEE_Result TA_OpenSessionEntryPoint(uint32_t param_types, TEE_Param params[4], v
     TEE_Result res;
     path_list_head *lh;
     path_entry *e;
-    char input[100], *path, *data;
-    size_t input_size, path_size, data_size, result;
+    char input[100], *path, *data, *id;
+    size_t input_size, path_size, data_size, id_size, result;
     int status;
 
     input_size = 100;
@@ -161,14 +161,50 @@ TEE_Result TA_OpenSessionEntryPoint(uint32_t param_types, TEE_Param params[4], v
             }
             free(data);
         } else if(strncmp(input, "mount", strlen("mount")) == 0) {
+            res = TUI->input("Enter sender ID: ", input, input_size);
+            if(res != TEE_SUCCESS) {
+                EMSG("Failed to input with code 0x%x", res);
+                return res;
+            }
+            id = strdup(input);
+            id_size = strlen(id) + 1;
             res = TUI->input("Enter dirname: ", input, input_size);
+            if(res != TEE_SUCCESS) {
+                EMSG("Failed to input with code 0x%x", res);
+                free(id);
+                return res;
+            }
+            path = strdup(input);
+            path_size = strlen(path) + 1;
+            res = TUI->input("Enter mount point: ", input, input_size);
+            if(res != TEE_SUCCESS) {
+                EMSG("Failed to input with code 0x%x", res);
+                free(id);
+                free(path);
+                return res;
+            }
+            data = strdup(input);
+            data_size = strlen(data) + 1;
+            res = trx_mount((unsigned char*)id, id_size, path, path_size, data, data_size);
+            if(res != TEE_SUCCESS) {
+                DMSG("trx_mount failed with code 0x%x", res);
+                free(id);
+                free(path);
+                free(data);
+                return TEE_ERROR_GENERIC;
+            }
+            free(id);
+            free(path);
+            free(data);
+        } else if(strncmp(input, "share", strlen("share")) == 0) {
+            res = TUI->input("Enter mount point: ", input, input_size);
             if(res != TEE_SUCCESS) {
                 EMSG("Failed to input with code 0x%x", res);
                 return res;
             }
             path = strdup(input);
             path_size = strlen(path) + 1;
-            res = TUI->input("Enter mount_point: ", input, input_size);
+            res = TUI->input("Enter receiver ID: ", input, input_size);
             if(res != TEE_SUCCESS) {
                 EMSG("Failed to input with code 0x%x", res);
                 free(path);
@@ -176,17 +212,15 @@ TEE_Result TA_OpenSessionEntryPoint(uint32_t param_types, TEE_Param params[4], v
             }
             data = strdup(input);
             data_size = strlen(data) + 1;
-            res = trx_mount(path, path_size, data, data_size);
+            res = trx_share((unsigned char*)data, data_size, path, path_size);
             if(res != TEE_SUCCESS) {
-                DMSG("trx_mount failed with code 0x%x", res);
+                DMSG("trx_share failed with code 0x%x", res);
                 free(path);
                 free(data);
                 return TEE_ERROR_GENERIC;
             }
             free(path);
             free(data);
-        } else if(strncmp(input, "share", strlen("share")) == 0) {
-
         } else if(strncmp(input, "exit", strlen("exit")) == 0) {
             break;
         }

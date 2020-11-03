@@ -3,14 +3,14 @@
 
 #include <tee_internal_api.h>
 #include "trx_pobj.h"
-#include <ibme/cipher.h>
 
 struct _trx_pobj;
 
 typedef struct _trx_file {
     char *ree_path;
     size_t ree_path_size;
-    Cipher *enc_bk;
+    char *bk_enc;
+    size_t bk_enc_size;
     void *fek_enc_iv;
     size_t fek_enc_iv_size;
     void *fek_enc;
@@ -31,5 +31,7 @@ int trx_file_deserialize(trx_file *file, void *data, size_t data_size);
 
 TEE_Result trx_file_encrypt(trx_file *file, struct _trx_pobj *pobj);
 TEE_Result trx_file_decrypt(trx_file *file, struct _trx_pobj *pobj);
+
+TEE_Result trx_file_share(trx_file *file, struct _trx_pobj *pobj);
 
 #endif //TRX_TRX_FILE_H

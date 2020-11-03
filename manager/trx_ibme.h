@@ -8,6 +8,7 @@
 typedef struct _trx_ibme {
     char *param_str;
     size_t param_str_size;
+    pairing_t *pairing;
     MPK *mpk;
     EK *ek;
     DK *dk;

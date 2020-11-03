@@ -14,6 +14,10 @@ trx_ibme *trx_ibme_init(void)
     if((ibme = (struct _trx_ibme*) malloc(sizeof(struct _trx_ibme))) == NULL) {
         return NULL;
     }
+    if(!(ibme->pairing = (pairing_t *) malloc(sizeof(pairing_t)))) {
+        free(ibme);
+        return NULL;
+    }
     ibme->mpk = NULL;
     ibme->ek = NULL;
     ibme->dk = NULL;
@@ -28,6 +32,10 @@ void trx_ibme_clear(trx_ibme *ibme)
         MPK_clear(ibme->mpk);
         EK_clear(ibme->ek);
         DK_clear(ibme->dk);
+        if(ibme->pairing) {
+            pairing_clear(*(ibme->pairing));
+            free(ibme->pairing);
+        }
         free(ibme->param_str);
     }
     free(ibme);
@@ -101,10 +109,8 @@ int trx_ibme_set_str(char *s, size_t n, trx_ibme *ibme)
 {
     size_t result, left;
     int status;
-    pairing_t pairing;
 
     result = 0;
-
     status = strlen("[");
     if(strncmp(s, "[", status) != 0) {
         return 0;
@@ -126,22 +132,18 @@ int trx_ibme_set_str(char *s, size_t n, trx_ibme *ibme)
     if((ibme->param_str = strndup(s + result, ibme->param_str_size - 1)) == NULL){
         return 0;
     }
-    if(1 == pairing_init_set_str(pairing, ibme->param_str)) {
+    if(1 == pairing_init_set_str(*(ibme->pairing), ibme->param_str)) {
         return 0;
     }
-    if(1 == MPK_init(pairing, &(ibme->mpk))) {
-        pairing_clear(pairing);
+    if(1 == MPK_init(*(ibme->pairing), &(ibme->mpk))) {
         return 0;
     }
-    if(1 == EK_init(pairing, &(ibme->ek))) {
-        pairing_clear(pairing);
+    if(1 == EK_init(*(ibme->pairing), &(ibme->ek))) {
         return 0;
     }
-    if(1 == DK_init(pairing, &(ibme->dk))) {
-        pairing_clear(pairing);
+    if(1 == DK_init(*(ibme->pairing), &(ibme->dk))) {
         return 0;
     }
-    pairing_clear(pairing);
     status = strlen(ibme->param_str);
     clip_sub(&result, status, &left, n);
     status = strlen(", ");
@@ -204,9 +206,9 @@ TEE_Result trx_ibme_save(trx_ibme *ibme)
     }
     TEE_MemMove(id, DEFAULT_IBME_ID, id_size);
 
-    //FIXME NO OVERWRITE READONLY
-    flags = TEE_DATA_FLAG_ACCESS_READ |	TEE_DATA_FLAG_ACCESS_WRITE |
-            TEE_DATA_FLAG_ACCESS_WRITE_META | TEE_DATA_FLAG_OVERWRITE;
+    flags = TEE_DATA_FLAG_ACCESS_READ;
+    //flags = TEE_DATA_FLAG_ACCESS_READ |	TEE_DATA_FLAG_ACCESS_WRITE |
+    //        TEE_DATA_FLAG_ACCESS_WRITE_META | TEE_DATA_FLAG_OVERWRITE;
 
     res = TEE_CreatePersistentObject(TEE_STORAGE_PRIVATE, id, id_size, flags,
             TEE_HANDLE_NULL, ibme_str, ibme_str_len + 1, &obj);
@@ -227,13 +229,13 @@ TEE_Result trx_ibme_load(trx_ibme *ibme) {
     TEE_ObjectHandle obj;
     TEE_ObjectInfo obj_info;
 
+
     id_size = strlen(DEFAULT_IBME_ID) + 1;
     if(!(id = TEE_Malloc(id_size, 0))) {
         return TEE_ERROR_OUT_OF_MEMORY;
     }
     TEE_MemMove(id, DEFAULT_IBME_ID, id_size);
-
-    flags = TEE_DATA_FLAG_ACCESS_READ | TEE_DATA_FLAG_SHARE_READ;
+    flags = TEE_DATA_FLAG_ACCESS_READ;
 
     res = TEE_OpenPersistentObject(TEE_STORAGE_PRIVATE, id, id_size, flags, &obj);
     if (res != TEE_SUCCESS) {
@@ -241,33 +243,29 @@ TEE_Result trx_ibme_load(trx_ibme *ibme) {
         TEE_Free(id);
         return res;
     }
+    TEE_Free(id);
+
     res = TEE_GetObjectInfo1(obj, &obj_info);
     if (res != TEE_SUCCESS) {
         EMSG("Failed to create persistent object, res=0x%08x", res);
         TEE_CloseObject(obj);
-        TEE_Free(id);
         return res;
     }
     if((ibme_str = (char*) malloc(obj_info.dataSize)) == NULL) {
         TEE_CloseObject(obj);
-        TEE_Free(id);
         return TEE_ERROR_OUT_OF_MEMORY;
     }
     res = TEE_ReadObjectData(obj, ibme_str, obj_info.dataSize, &count);
     if (res != TEE_SUCCESS || count != obj_info.dataSize) {
         EMSG("TEE_ReadObjectData failed 0x%08x, read %" PRIu32 "over %u", res, count, obj_info.dataSize);
         TEE_CloseObject(obj);
-        TEE_Free(id);
         free(ibme_str);
         return res;
     }
-    TEE_CloseObject(obj);
-    TEE_Free(id);
-
     if(trx_ibme_set_str(ibme_str, obj_info.dataSize, ibme) == 0) {
         res = TEE_ERROR_GENERIC;
     }
-
+    TEE_CloseObject(obj);
     free(ibme_str);
     return res;
 }

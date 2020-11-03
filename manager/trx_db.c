@@ -585,6 +585,7 @@ trx_pobj *trx_db_list_insert_pobj(TEE_UUID *uuid, char *path, size_t path_size, 
     trx_db *db;
     char *mount_point, *id;
     size_t mount_point_size, id_size;
+    TEE_UUID manager_uuid = TA_TRX_MANAGER_UUID;
 
     (void)&path_size;
 
@@ -599,6 +600,12 @@ trx_pobj *trx_db_list_insert_pobj(TEE_UUID *uuid, char *path, size_t path_size, 
         return NULL;
     }
     id_size = strlen(id) + 1;
+    //FIXME
+    if(trx_db_get(&manager_uuid, DEFAULT_DB_ID, strlen(DEFAULT_DB_ID) + 1, db) == NULL) {
+        if (trx_db_load(db) != 0) {
+            return NULL;
+        }
+    }
     return trx_db_insert(uuid, id, id_size, db);
 }
 
@@ -607,6 +614,7 @@ trx_pobj *trx_db_list_get_pobj(TEE_UUID *uuid, char *path, size_t path_size, db_
     char *mount_point, *id;
     size_t mount_point_size, id_size;
     trx_pobj *pobj;
+    TEE_UUID manager_uuid = TA_TRX_MANAGER_UUID;
 
     (void)&path_size;
 
@@ -621,6 +629,12 @@ trx_pobj *trx_db_list_get_pobj(TEE_UUID *uuid, char *path, size_t path_size, db_
         return NULL;
     }
     id_size = strlen(id) + 1;
+    //FIXME
+    if(trx_db_get(&manager_uuid, DEFAULT_DB_ID, strlen(DEFAULT_DB_ID) + 1, db) == NULL) {
+        if (trx_db_load(db) != 0) {
+            return NULL;
+        }
+    }
     if(!(pobj = trx_db_get(uuid, id, id_size, db))) {
         return NULL;
     }
@@ -630,16 +644,15 @@ trx_pobj *trx_db_list_get_pobj(TEE_UUID *uuid, char *path, size_t path_size, db_
 trx_db *trx_db_list_get(char *mount_point, size_t mount_point_size, db_list_head *h)
 {
     db_entry *e;
-    TEE_UUID uuid = TA_TRX_MANAGER_UUID;
 
     SLIST_FOREACH(e, h, _db_entries)  {
         if(e->db->mount_point_size == mount_point_size) {
             if(memcmp(e->db->mount_point, mount_point, mount_point_size) == 0) {
-                if(trx_db_get(&uuid, DEFAULT_DB_ID, strlen(DEFAULT_DB_ID) + 1, e->db) == NULL) {
-                    if (trx_db_load(e->db) != 0) {
-                        return NULL;
-                    }
-                }
+                //if(trx_db_get(&uuid, DEFAULT_DB_ID, strlen(DEFAULT_DB_ID) + 1, e->db) == NULL) {
+                //    if (trx_db_load(e->db) != 0) {
+                //        return NULL;
+                //    }
+                //}
                 return e->db;
             }
         }
