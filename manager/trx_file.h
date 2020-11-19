@@ -7,8 +7,8 @@
 struct _trx_pobj;
 
 typedef struct _trx_file {
-    char *ree_path;
-    size_t ree_path_size;
+    char *ree_basename;
+    size_t ree_basename_size;
     char *bk_enc;
     size_t bk_enc_size;
     void *fek_enc_iv;
@@ -19,9 +19,10 @@ typedef struct _trx_file {
     size_t data_enc_iv_size;
     void *data_enc;
     size_t data_enc_size;
+    struct _trx_pobj *pobj;
 } trx_file;
 
-trx_file *trx_file_init(const char *ree_path, size_t ree_path_size);
+trx_file *trx_file_init(void);
 void trx_file_clear(trx_file *file);
 int trx_file_save(trx_file *file);
 int trx_file_load(trx_file *file);
@@ -29,9 +30,7 @@ int trx_file_load(trx_file *file);
 int trx_file_serialize(trx_file *file, void *data, size_t *data_size);
 int trx_file_deserialize(trx_file *file, void *data, size_t data_size);
 
-TEE_Result trx_file_encrypt(trx_file *file, struct _trx_pobj *pobj);
-TEE_Result trx_file_decrypt(trx_file *file, struct _trx_pobj *pobj);
-
-TEE_Result trx_file_share(trx_file *file, struct _trx_pobj *pobj);
+TEE_Result trx_file_encrypt(trx_file *file);
+TEE_Result trx_file_decrypt(trx_file *file);
 
 #endif //TRX_TRX_FILE_H

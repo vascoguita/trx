@@ -5,6 +5,7 @@
 #include <tee_api_defines.h>
 
 #define DEFAULT_DB_ID               "db"
+#define DEFAULT_DB_ID_SIZE          3
 #define DEFAULT_DB_LIST_ID          "db_list"
 #define DEFAULT_IBME_ID             "ibme"
 #define DEFAULT_REE_DIRNAME         "trx"

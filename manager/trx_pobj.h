@@ -11,11 +11,10 @@ struct _trx_tss;
 typedef struct _trx_pobj {
     char *id;
     size_t id_size;
-    char *ree_basename;
-    size_t ree_basename_size;
     struct _trx_tss *tss;
     void *data;
     size_t data_size;
+    struct _trx_file *file;
 } trx_pobj;
 
 trx_pobj *trx_pobj_init(void);
