@@ -5,7 +5,8 @@
 #include "trx_manager_defaults.h"
 #include <ibme/ibme.h>
 
-typedef struct _trx_ibme {
+typedef struct _trx_ibme
+{
     char *param_str;
     size_t param_str_size;
     pairing_t *pairing;

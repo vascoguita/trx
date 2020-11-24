@@ -13,7 +13,8 @@ struct _tss_list_head;
 struct _trx_pobj;
 struct _trx_path;
 
-typedef struct _trx_db {
+typedef struct _trx_db
+{
     struct _tss_list_head *tss_lh;
     struct _trx_pobj *last_pobj;
     char *mount_point;
@@ -34,9 +35,11 @@ char *trx_db_gen_ree_basename(trx_db *db);
 int trx_db_save(trx_db *db);
 int trx_db_load(trx_db *db);
 
-typedef struct _db_entry {
+typedef struct _db_entry
+{
     trx_db *db;
-    SLIST_ENTRY(_db_entry) _db_entries;
+    SLIST_ENTRY(_db_entry)
+    _db_entries;
 } db_entry;
 typedef SLIST_HEAD(_db_list_head, _db_entry) db_list_head;
 

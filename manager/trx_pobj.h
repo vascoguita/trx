@@ -8,7 +8,8 @@
 
 struct _trx_tss;
 
-typedef struct _trx_pobj {
+typedef struct _trx_pobj
+{
     char *id;
     size_t id_size;
     struct _trx_tss *tss;
@@ -25,9 +26,11 @@ int trx_pobj_load(trx_pobj *pobj);
 int trx_pobj_snprint(char *s, size_t n, trx_pobj *pobj);
 int trx_pobj_set_str(char *s, size_t n, trx_pobj *pobj);
 
-typedef struct _pobj_entry {
+typedef struct _pobj_entry
+{
     trx_pobj *pobj;
-    SLIST_ENTRY(_pobj_entry) _pobj_entries;
+    SLIST_ENTRY(_pobj_entry)
+    _pobj_entries;
 } pobj_entry;
 typedef SLIST_HEAD(_pobj_list_head, _pobj_entry) pobj_list_head;
 

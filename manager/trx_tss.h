@@ -9,7 +9,8 @@
 struct _pobj_list_head;
 struct _trx_db;
 
-typedef struct _trx_tss {
+typedef struct _trx_tss
+{
     TEE_UUID *uuid;
     struct _pobj_list_head *pobj_lh;
     struct _trx_db *db;
@@ -20,9 +21,11 @@ void trx_tss_clear(trx_tss *tss);
 int trx_tss_snprint(char *s, size_t n, trx_tss *tss);
 int trx_tss_set_str(char *s, size_t n, trx_tss *tss);
 
-typedef struct _tss_entry {
+typedef struct _tss_entry
+{
     trx_tss *tss;
-    SLIST_ENTRY(_tss_entry) _tss_entries;
+    SLIST_ENTRY(_tss_entry)
+    _tss_entries;
 } tss_entry;
 typedef SLIST_HEAD(_tss_list_head, _tss_entry) tss_list_head;
 

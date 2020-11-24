@@ -6,7 +6,8 @@
 
 struct _trx_pobj;
 
-typedef struct _trx_file {
+typedef struct _trx_file
+{
     char *ree_basename;
     size_t ree_basename_size;
     char *bk_enc;

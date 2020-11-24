@@ -63,19 +63,19 @@ TEE_Result setup(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
         trx_ibme_clear(ibme);
         return TEE_ERROR_GENERIC;
     }
-    if (1 == MPK_init(*(ibme->pairing), &(ibme->mpk)))
+    if (!(ibme->mpk = MPK_init(*(ibme->pairing))))
     {
         EMSG("TA_TRX_MANAGER_CMD_SETUP failed calling function \'MPK_init\'");
         trx_ibme_clear(ibme);
         return TEE_ERROR_GENERIC;
     }
-    if (1 == EK_init(*(ibme->pairing), &(ibme->ek)))
+    if (!(ibme->ek = EK_init(*(ibme->pairing))))
     {
         EMSG("TA_TRX_MANAGER_CMD_SETUP failed calling function \'EK_init\'");
         trx_ibme_clear(ibme);
         return TEE_ERROR_GENERIC;
     }
-    if (1 == DK_init(*(ibme->pairing), &(ibme->dk)))
+    if (!(ibme->dk = DK_init(*(ibme->pairing))))
     {
         EMSG("TA_TRX_MANAGER_CMD_SETUP failed calling function \'DK_init\'");
         trx_ibme_clear(ibme);
@@ -158,9 +158,7 @@ TEE_Result setup(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
         trx_db_list_clear(db_lh);
         return TEE_ERROR_GENERIC;
     }
-
     trx_db_list_clear(db_lh);
-
     return res;
 }
 
@@ -477,7 +475,7 @@ TEE_Result mount(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
         trx_db_clear(db);
         return TEE_ERROR_GENERIC;
     }
-    if (1 == Cipher_init(*(ibme->pairing), &bk_enc))
+    if (!(bk_enc = Cipher_init(*(ibme->pairing))))
     {
         EMSG("TA_TRX_MANAGER_CMD_MOUNT failed calling function \'Cipher_init\'");
         trx_ibme_clear(ibme);
@@ -661,7 +659,7 @@ TEE_Result share(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
         trx_db_list_clear(db_lh);
         return TEE_ERROR_GENERIC;
     }
-    if (1 == Cipher_init(*(ibme->pairing), &bk_enc))
+    if (!(bk_enc = Cipher_init(*(ibme->pairing))))
     {
         EMSG("TA_TRX_MANAGER_CMD_SHARE failed calling function \'Cipher_init\'");
         trx_ibme_clear(ibme);

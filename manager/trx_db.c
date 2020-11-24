@@ -237,10 +237,8 @@ int trx_db_save(trx_db *db)
 
     if (!(pobj = trx_db_get(&uuid, DEFAULT_DB_ID, DEFAULT_DB_ID_SIZE, db)))
     {
-
         if (!(pobj = trx_db_insert(&uuid, DEFAULT_DB_ID, DEFAULT_DB_ID_SIZE, db)))
         {
-
             return 1;
         }
     }
@@ -260,7 +258,6 @@ int trx_db_save(trx_db *db)
     {
         return 1;
     }
-
     return 0;
 }
 
