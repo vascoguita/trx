@@ -5,18 +5,21 @@
 #include <sys/queue.h>
 #include "trx_tss.h"
 #include "trx_pobj.h"
+#include "trx_file.h"
 #include "trx_path.h"
 #include "trx_manager_defaults.h"
 
 struct _path_list_head;
 struct _tss_list_head;
 struct _trx_pobj;
+struct _trx_file;
 struct _trx_path;
 
 typedef struct _trx_db
 {
     struct _tss_list_head *tss_lh;
-    struct _trx_pobj *last_pobj;
+    char *next_ree_basename;
+    size_t next_ree_basename_size;
     char *mount_point;
     size_t mount_point_size;
     char *ree_dirname;
@@ -30,7 +33,7 @@ struct _trx_pobj *trx_db_insert(const TEE_UUID *uuid, const char *id, size_t id_
 struct _trx_pobj *trx_db_get(TEE_UUID *uuid, const char *id, size_t id_size, trx_db *db);
 int trx_db_snprint(char *s, size_t n, trx_db *db);
 int trx_db_set_str(char *s, size_t n, trx_db *db);
-char *trx_db_gen_ree_basename(trx_db *db);
+int trx_db_gen_ree_basename(trx_db *db, struct _trx_file *file);
 
 int trx_db_save(trx_db *db);
 int trx_db_load(trx_db *db);

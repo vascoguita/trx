@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include "utils.h"
 #include <string.h>
+#include <utee_defines.h>
 #include <tee_internal_api.h>
 #include <tee_internal_api_extensions.h>
 #include <ree_fs_api.h>
@@ -45,7 +46,7 @@ void trx_pobj_clear(trx_pobj *pobj)
 int trx_pobj_save(trx_pobj *pobj)
 {
     TEE_Result res;
-
+    
     res = trx_file_encrypt(pobj->file);
     if (res != TEE_SUCCESS)
     {
@@ -74,6 +75,7 @@ int trx_pobj_load(trx_pobj *pobj)
     {
         return 1;
     }
+
     return 0;
 }
 

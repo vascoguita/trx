@@ -503,10 +503,7 @@ TEE_Result mount(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
     Cipher_clear(bk_enc);
     trx_ibme_clear(ibme);
 
-    if ((auth_msg_size = snprintf(NULL, 0, "Authorize Secure Storage Volume from \"%s\" to be mounted on "
-                                           "\"%s\"? [y\\n] ",
-                                  S, mount_point) +
-                         1) < 1)
+    if ((auth_msg_size = snprintf(NULL, 0, "Authorize Secure Storage Volume from \"%s\" to be mounted on \"%s\"? [y\\n] ", S, mount_point) + 1) < 1)
     {
         EMSG("TA_TRX_MANAGER_CMD_MOUNT failed calling function \'snprintf\'");
         trx_db_clear(db);

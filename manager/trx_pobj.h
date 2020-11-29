@@ -2,6 +2,7 @@
 #define TRX_TRX_POBJ_H
 
 #include <tee_internal_api.h>
+#include <utee_defines.h>
 #include <sys/queue.h>
 #include "trx_tss.h"
 #include "trx_file.h"

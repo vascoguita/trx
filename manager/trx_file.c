@@ -21,12 +21,8 @@ trx_file *trx_file_init(void)
     file->ree_basename_size = 0;
     file->bk_enc = NULL;
     file->bk_enc_size = 0;
-    file->fek_enc_iv = NULL;
-    file->fek_enc_iv_size = 0;
     file->fek_enc = NULL;
     file->fek_enc_size = 0;
-    file->data_enc_iv = NULL;
-    file->data_enc_iv_size = 0;
     file->data_enc = NULL;
     file->data_enc_size = 0;
     file->pobj = NULL;
@@ -39,9 +35,7 @@ void trx_file_clear(trx_file *file)
     {
         free(file->ree_basename);
         free(file->bk_enc);
-        free(file->fek_enc_iv);
         free(file->fek_enc);
-        free(file->data_enc_iv);
         free(file->data_enc);
     }
     free(file);
@@ -181,7 +175,7 @@ TEE_Result trx_file_encrypt(trx_file *file)
 {
     TEE_Result res;
     TEE_OperationHandle op_handle;
-    uint32_t tmp_size;
+    uint32_t tmp_data_enc_size, tmp_tag_size, tmp_fek_enc_size;
     TEE_ObjectHandle fek, tsk;
     uint8_t fek_buffer[AES_KEY_SIZE];
     uint32_t fek_buffer_size;
@@ -208,13 +202,7 @@ TEE_Result trx_file_encrypt(trx_file *file)
         return TEE_ERROR_GENERIC;
     }
 
-    file->data_enc_iv_size = IV_SIZE;
-    if (!(file->data_enc_iv = malloc(file->data_enc_iv_size)))
-    {
-        return TEE_ERROR_GENERIC;
-    }
-
-    TEE_GenerateRandom(file->data_enc_iv, file->data_enc_iv_size);
+    TEE_GenerateRandom(file->data_enc_nonce, NONCE_SIZE);
     res = TEE_AllocateTransientObject(TEE_TYPE_AES, AES_KEY_BIT_SIZE, &fek);
     if (res != TEE_SUCCESS)
     {
@@ -228,13 +216,12 @@ TEE_Result trx_file_encrypt(trx_file *file)
         return res;
     }
 
-    res = TEE_AllocateOperation(&op_handle, TEE_ALG_AES_CBC_NOPAD, TEE_MODE_ENCRYPT, AES_KEY_BIT_SIZE);
+    res = TEE_AllocateOperation(&op_handle, TEE_ALG_AES_GCM, TEE_MODE_ENCRYPT, AES_KEY_BIT_SIZE);
     if (res != TEE_SUCCESS)
     {
         TEE_FreeTransientObject(fek);
         return res;
     }
-
     res = TEE_SetOperationKey(op_handle, fek);
     if (res != TEE_SUCCESS)
     {
@@ -243,16 +230,22 @@ TEE_Result trx_file_encrypt(trx_file *file)
         return res;
     }
 
-    TEE_CipherInit(op_handle, file->data_enc_iv, file->data_enc_iv_size);
-    tmp_size = file->data_enc_size;
-    res = TEE_CipherUpdate(op_handle, file->data_enc, file->data_enc_size, file->data_enc, &tmp_size);
-    if ((res != TEE_SUCCESS) || (tmp_size != file->data_enc_size))
+    res = TEE_AEInit(op_handle, file->data_enc_nonce, NONCE_SIZE, TAG_BIT_SIZE, 0, file->data_enc_size);
+    if (res != TEE_SUCCESS)
     {
         TEE_FreeOperation(op_handle);
         TEE_FreeTransientObject(fek);
         return res;
     }
-
+    tmp_data_enc_size = file->data_enc_size;
+    tmp_tag_size = TAG_SIZE;
+    res = TEE_AEEncryptFinal(op_handle, file->data_enc, file->data_enc_size, file->data_enc, &tmp_data_enc_size, file->tag, &tmp_tag_size);
+    if ((res != TEE_SUCCESS) || (tmp_data_enc_size != file->data_enc_size) || (tmp_tag_size != TAG_SIZE))
+    {
+        TEE_FreeOperation(op_handle);
+        TEE_FreeTransientObject(fek);
+        return TEE_ERROR_GENERIC;
+    }
     TEE_FreeOperation(op_handle);
     res = TEE_GetObjectBufferAttribute(fek, TEE_ATTR_SECRET_VALUE, fek_buffer, &fek_buffer_size);
     if (res != TEE_SUCCESS)
@@ -279,13 +272,7 @@ TEE_Result trx_file_encrypt(trx_file *file)
         return TEE_ERROR_GENERIC;
     }
 
-    file->fek_enc_iv_size = IV_SIZE;
-    if (!(file->fek_enc_iv = malloc(file->fek_enc_iv_size)))
-    {
-        return TEE_ERROR_GENERIC;
-    }
-
-    TEE_GenerateRandom(file->fek_enc_iv, file->fek_enc_iv_size);
+    TEE_GenerateRandom(file->fek_enc_iv, IV_SIZE);
     res = TEE_AllocateOperation(&op_handle, TEE_ALG_HMAC_SHA256, TEE_MODE_MAC, HMACSHA256_KEY_BIT_SIZE);
     if (res != TEE_SUCCESS)
     {
@@ -337,11 +324,11 @@ TEE_Result trx_file_encrypt(trx_file *file)
         return res;
     }
 
-    TEE_CipherInit(op_handle, file->fek_enc_iv, file->fek_enc_iv_size);
+    TEE_CipherInit(op_handle, file->fek_enc_iv, IV_SIZE);
 
-    tmp_size = file->fek_enc_size;
-    res = TEE_CipherUpdate(op_handle, file->fek_enc, file->fek_enc_size, file->fek_enc, &tmp_size);
-    if ((res != TEE_SUCCESS) || (tmp_size != file->fek_enc_size))
+    tmp_fek_enc_size = file->fek_enc_size;
+    res = TEE_CipherUpdate(op_handle, file->fek_enc, file->fek_enc_size, file->fek_enc, &tmp_fek_enc_size);
+    if ((res != TEE_SUCCESS) || (tmp_fek_enc_size != file->fek_enc_size))
     {
         TEE_FreeOperation(op_handle);
         TEE_FreeTransientObject(tsk);
@@ -359,7 +346,7 @@ TEE_Result trx_file_decrypt(trx_file *file)
 {
     TEE_Result res;
     TEE_OperationHandle op_handle;
-    uint32_t tmp_size;
+    uint32_t tmp_data_enc_size, tmp_fek_enc_size;
     TEE_ObjectHandle fek, tsk;
     uint8_t fek_buffer[AES_KEY_SIZE];
     size_t fek_buffer_size;
@@ -411,6 +398,7 @@ TEE_Result trx_file_decrypt(trx_file *file)
     {
         TEE_FreeTransientObject(tsk);
         return res;
+        
     }
     res = TEE_SetOperationKey(op_handle, tsk);
     if (res != TEE_SUCCESS)
@@ -419,11 +407,12 @@ TEE_Result trx_file_decrypt(trx_file *file)
         TEE_FreeTransientObject(tsk);
         return res;
     }
-    TEE_CipherInit(op_handle, file->fek_enc_iv, file->fek_enc_iv_size);
-    tmp_size = file->fek_enc_size;
-    res = TEE_CipherUpdate(op_handle, file->fek_enc, file->fek_enc_size, file->fek_enc, &tmp_size);
-    if ((res != TEE_SUCCESS) || (tmp_size != file->fek_enc_size))
+    TEE_CipherInit(op_handle, file->fek_enc_iv, IV_SIZE);
+    tmp_fek_enc_size = file->fek_enc_size;
+    res = TEE_CipherUpdate(op_handle, file->fek_enc, file->fek_enc_size, file->fek_enc, &tmp_fek_enc_size);
+    if ((res != TEE_SUCCESS) || (tmp_fek_enc_size != file->fek_enc_size))
     {
+        
         TEE_FreeOperation(op_handle);
         TEE_FreeTransientObject(tsk);
         return res;
@@ -451,7 +440,7 @@ TEE_Result trx_file_decrypt(trx_file *file)
 
     // Decrypt data
 
-    res = TEE_AllocateOperation(&op_handle, TEE_ALG_AES_CBC_NOPAD, TEE_MODE_DECRYPT, AES_KEY_BIT_SIZE);
+    res = TEE_AllocateOperation(&op_handle, TEE_ALG_AES_GCM, TEE_MODE_DECRYPT, AES_KEY_BIT_SIZE);
     if (res != TEE_SUCCESS)
     {
         TEE_FreeTransientObject(fek);
@@ -464,10 +453,16 @@ TEE_Result trx_file_decrypt(trx_file *file)
         TEE_FreeTransientObject(fek);
         return res;
     }
-    TEE_CipherInit(op_handle, file->data_enc_iv, file->data_enc_iv_size);
-    tmp_size = file->data_enc_size;
-    res = TEE_CipherUpdate(op_handle, file->data_enc, file->data_enc_size, file->data_enc, &tmp_size);
-    if ((res != TEE_SUCCESS) || (tmp_size != file->data_enc_size))
+    res = TEE_AEInit(op_handle, file->data_enc_nonce, NONCE_SIZE, TAG_BIT_SIZE, 0, file->data_enc_size);
+    if (res != TEE_SUCCESS)
+    {
+        TEE_FreeOperation(op_handle);
+        TEE_FreeTransientObject(fek);
+        return res;
+    }
+    tmp_data_enc_size = file->data_enc_size;
+    res = TEE_AEDecryptFinal(op_handle, file->data_enc, file->data_enc_size, file->data_enc, &tmp_data_enc_size, file->tag, TAG_SIZE);
+    if ((res != TEE_SUCCESS) || (tmp_data_enc_size != file->data_enc_size))
     {
         TEE_FreeOperation(op_handle);
         TEE_FreeTransientObject(fek);
@@ -503,8 +498,9 @@ int trx_file_serialize(trx_file *file, void *data, size_t *data_size)
     {
         return 1;
     }
-    tmp_data_size = sizeof(size_t) + file->bk_enc_size + sizeof(size_t) + file->fek_enc_iv_size + sizeof(size_t) +
-                    file->fek_enc_size + sizeof(size_t) + file->data_enc_iv_size + sizeof(size_t) + file->data_enc_size;
+    tmp_data_size = sizeof(size_t) + file->bk_enc_size + IV_SIZE +
+                    sizeof(size_t) + file->fek_enc_size + NONCE_SIZE +
+                    sizeof(size_t) + file->data_enc_size + TAG_SIZE;
 
     if (!data && !(*data_size))
     {
@@ -523,21 +519,20 @@ int trx_file_serialize(trx_file *file, void *data, size_t *data_size)
     cpy_ptr += sizeof(size_t);
     memcpy(cpy_ptr, file->bk_enc, file->bk_enc_size);
     cpy_ptr += file->bk_enc_size;
-    memcpy(cpy_ptr, &(file->fek_enc_iv_size), sizeof(size_t));
-    cpy_ptr += sizeof(size_t);
-    memcpy(cpy_ptr, file->fek_enc_iv, file->fek_enc_iv_size);
-    cpy_ptr += file->fek_enc_iv_size;
+    memcpy(cpy_ptr, file->fek_enc_iv, IV_SIZE);
+    cpy_ptr += IV_SIZE;
     memcpy(cpy_ptr, &(file->fek_enc_size), sizeof(size_t));
     cpy_ptr += sizeof(size_t);
     memcpy(cpy_ptr, file->fek_enc, file->fek_enc_size);
     cpy_ptr += file->fek_enc_size;
-    memcpy(cpy_ptr, &(file->data_enc_iv_size), sizeof(size_t));
-    cpy_ptr += sizeof(size_t);
-    memcpy(cpy_ptr, file->data_enc_iv, file->data_enc_iv_size);
-    cpy_ptr += file->data_enc_iv_size;
+    memcpy(cpy_ptr, file->data_enc_nonce, NONCE_SIZE);
+    cpy_ptr += NONCE_SIZE;
     memcpy(cpy_ptr, &(file->data_enc_size), sizeof(size_t));
     cpy_ptr += sizeof(size_t);
     memcpy(cpy_ptr, file->data_enc, file->data_enc_size);
+    cpy_ptr += file->data_enc_size;
+    memcpy(cpy_ptr, file->tag, TAG_SIZE);
+    cpy_ptr += TAG_SIZE;
     return 0;
 }
 
@@ -573,25 +568,13 @@ int trx_file_deserialize(trx_file *file, void *data, size_t data_size)
     cpy_ptr += file->bk_enc_size;
     left -= file->bk_enc_size;
 
-    if (left < sizeof(size_t))
+    if (left < IV_SIZE)
     {
         return 1;
     }
-    memcpy(&(file->fek_enc_iv_size), cpy_ptr, sizeof(size_t));
-    cpy_ptr += sizeof(size_t);
-    left -= sizeof(size_t);
-
-    if (left < file->fek_enc_iv_size)
-    {
-        return 1;
-    }
-    if (!(file->fek_enc_iv = malloc(file->fek_enc_iv_size)))
-    {
-        return 1;
-    }
-    memcpy(file->fek_enc_iv, cpy_ptr, file->fek_enc_iv_size);
-    cpy_ptr += file->fek_enc_iv_size;
-    left -= file->fek_enc_iv_size;
+    memcpy(file->fek_enc_iv, cpy_ptr, IV_SIZE);
+    cpy_ptr += IV_SIZE;
+    left -= IV_SIZE;
 
     if (left < sizeof(size_t))
     {
@@ -613,25 +596,13 @@ int trx_file_deserialize(trx_file *file, void *data, size_t data_size)
     cpy_ptr += file->fek_enc_size;
     left -= file->fek_enc_size;
 
-    if (left < sizeof(size_t))
+    if (left < NONCE_SIZE)
     {
         return 1;
     }
-    memcpy(&(file->data_enc_iv_size), cpy_ptr, sizeof(size_t));
-    cpy_ptr += sizeof(size_t);
-    left -= sizeof(size_t);
-
-    if (left < file->data_enc_iv_size)
-    {
-        return 1;
-    }
-    if (!(file->data_enc_iv = malloc(file->data_enc_iv_size)))
-    {
-        return 1;
-    }
-    memcpy(file->data_enc_iv, cpy_ptr, file->data_enc_iv_size);
-    cpy_ptr += file->data_enc_iv_size;
-    left -= file->data_enc_iv_size;
+    memcpy(file->data_enc_nonce, cpy_ptr, NONCE_SIZE);
+    cpy_ptr += NONCE_SIZE;
+    left -= NONCE_SIZE;
 
     if (left < sizeof(size_t))
     {
@@ -650,12 +621,20 @@ int trx_file_deserialize(trx_file *file, void *data, size_t data_size)
         return 1;
     }
     memcpy(file->data_enc, cpy_ptr, file->data_enc_size);
+    cpy_ptr += file->data_enc_size;
     left -= file->data_enc_size;
+
+    if (left < TAG_SIZE)
+    {
+        return 1;
+    }
+    memcpy(file->tag, cpy_ptr, TAG_SIZE);
+    cpy_ptr += TAG_SIZE;
+    left -= TAG_SIZE;
 
     if (left != 0)
     {
         return 1;
     }
-
     return 0;
 }

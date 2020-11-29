@@ -28,7 +28,8 @@ trx_db *trx_db_init(void)
         trx_db_clear(db);
         return NULL;
     }
-    db->last_pobj = NULL;
+    db->next_ree_basename = strdup("0");
+    db->next_ree_basename_size = strlen(db->next_ree_basename) + 1;
     db->mount_point = NULL;
     db->mount_point_size = 0;
     db->ree_dirname = NULL;
@@ -41,6 +42,7 @@ void trx_db_clear(trx_db *db)
     if (db)
     {
         trx_tss_list_clear(db->tss_lh);
+        free(db->next_ree_basename);
         free(db->mount_point);
         free(db->ree_dirname);
         TEE_FreeTransientObject(db->bk);
@@ -48,34 +50,33 @@ void trx_db_clear(trx_db *db)
     free(db);
 }
 
-char *trx_db_gen_ree_basename(trx_db *db)
+int trx_db_gen_ree_basename(trx_db *db, trx_file *file)
 {
-    char *ree_basename;
-    size_t ree_basename_size;
-    unsigned long ree_basename_n = 0;
+    unsigned long int next_ree_basename_n;
 
-    if (db->last_pobj)
+    if(!(file->ree_basename = strndup(db->next_ree_basename, db->next_ree_basename_size))) {
+        return 1;
+    }
+    file->ree_basename_size = db->next_ree_basename_size;
+
+    next_ree_basename_n = strtoul(db->next_ree_basename, NULL, 10) + 1;
+
+    if ((db->next_ree_basename_size = snprintf(NULL, 0, "%lu", next_ree_basename_n) + 1) < 1)
     {
-        ree_basename_n = strtoul(db->last_pobj->file->ree_basename, NULL, 0) + 1;
+        return 1;
     }
 
-    if ((ree_basename_size = snprintf(NULL, 0, "%lu", ree_basename_n) + 1) < 1)
+    if (!(db->next_ree_basename = realloc(db->next_ree_basename, db->next_ree_basename_size)))
     {
-        return NULL;
+        return 1;
     }
 
-    if (!(ree_basename = malloc(ree_basename_size)))
+    if (db->next_ree_basename_size != (size_t)(snprintf(db->next_ree_basename, db->next_ree_basename_size, "%lu", next_ree_basename_n) + 1))
     {
-        return NULL;
+        return 1;
     }
 
-    if (ree_basename_size != (size_t)(snprintf(ree_basename, ree_basename_size, "%lu", ree_basename_n) + 1))
-    {
-        free(ree_basename);
-        return NULL;
-    }
-
-    return ree_basename;
+    return 0;
 }
 
 trx_pobj *trx_db_insert(const TEE_UUID *uuid, const char *id, size_t id_size, trx_db *db)
@@ -103,13 +104,11 @@ trx_pobj *trx_db_insert(const TEE_UUID *uuid, const char *id, size_t id_size, tr
         return NULL;
     }
 
-    if (!(pobj->file->ree_basename = trx_db_gen_ree_basename(db)))
+    if (trx_db_gen_ree_basename(db, pobj->file) != 0)
     {
         trx_pobj_clear(pobj);
         return NULL;
     }
-
-    pobj->file->ree_basename_size = strlen(pobj->file->ree_basename) + 1;
 
     pobj->tss = tss;
 
@@ -125,8 +124,6 @@ trx_pobj *trx_db_insert(const TEE_UUID *uuid, const char *id, size_t id_size, tr
         trx_pobj_clear(pobj);
         return NULL;
     }
-
-    db->last_pobj = pobj;
 
     return pobj;
 }
@@ -161,7 +158,19 @@ int trx_db_snprint(char *s, size_t n, trx_db *db)
         return status;
     }
     clip_sub(&result, status, &left, n);
-    status = trx_pobj_snprint(s + result, left, db->last_pobj);
+    status = snprintf(s + result, left, "%zu", db->next_ree_basename_size);
+    if (status < 0)
+    {
+        return status;
+    }
+    clip_sub(&result, status, &left, n);
+    status = snprintf(s + result, left, ", ");
+    if (status < 0)
+    {
+        return status;
+    }
+    clip_sub(&result, status, &left, n);
+    status = snprintf(s + result, left, "%s", db->next_ree_basename);
     if (status < 0)
     {
         return status;
@@ -200,15 +209,27 @@ int trx_db_set_str(char *s, size_t n, trx_db *db)
         return 0;
     }
     clip_sub(&result, status, &left, n);
-    if (!(db->last_pobj = trx_pobj_init()))
+    if ((db->next_ree_basename_size = strtoul(s + result, NULL, 0)) == 0)
     {
         return 0;
     }
-    if (trx_pobj_set_str(s + result, left, db->last_pobj) == 0)
+    status = snprintf(NULL, 0, "%zu", db->next_ree_basename_size);
+    clip_sub(&result, status, &left, n);
+    if ((db->next_ree_basename = (void *)malloc(db->next_ree_basename_size)) == NULL)
     {
         return 0;
     }
-    status = trx_pobj_snprint(NULL, 0, db->last_pobj);
+    status = strlen(", ");
+    if (strncmp(s + result, ", ", status) != 0)
+    {
+        return 0;
+    }
+    clip_sub(&result, status, &left, n);
+    if ((db->next_ree_basename = strndup(s + result, db->next_ree_basename_size - 1)) == NULL)
+    {
+        return 0;
+    }
+    status = strlen(db->next_ree_basename);
     clip_sub(&result, status, &left, n);
     status = strlen(", ");
     if (strncmp(s + result, ", ", status) != 0)
@@ -295,7 +316,6 @@ int trx_db_load(trx_db *db)
         return 1;
     }
     pobj->file->ree_basename_size = strlen(pobj->file->ree_basename) + 1;
-
     if (trx_pobj_load(pobj) != 0)
     {
         trx_tss_clear(tss);
@@ -306,31 +326,29 @@ int trx_db_load(trx_db *db)
         trx_tss_clear(tss);
         return 1;
     }
-
     if (pobj->file->bk_enc && pobj->file->bk_enc_size)
     {
         if (!(pobj2 = trx_db_get(&uuid, DEFAULT_DB_ID, DEFAULT_DB_ID_SIZE, db)))
         {
-
             trx_tss_clear(tss);
             return 1;
         }
 
         pobj2->file->bk_enc_size = pobj->file->bk_enc_size;
-
         free(pobj2->file->bk_enc);
 
         if (!(pobj2->file->bk_enc = malloc(pobj2->file->bk_enc_size)))
         {
-
             trx_tss_clear(tss);
             return 1;
         }
 
         memcpy(pobj2->file->bk_enc, pobj->file->bk_enc, pobj2->file->bk_enc_size);
     }
+    
 
     trx_tss_clear(tss);
+    
 
     return 0;
 }

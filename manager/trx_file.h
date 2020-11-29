@@ -3,6 +3,7 @@
 
 #include <tee_internal_api.h>
 #include "trx_pobj.h"
+#include "trx_manager_defaults.h"
 
 struct _trx_pobj;
 
@@ -12,14 +13,13 @@ typedef struct _trx_file
     size_t ree_basename_size;
     char *bk_enc;
     size_t bk_enc_size;
-    void *fek_enc_iv;
-    size_t fek_enc_iv_size;
+    uint8_t fek_enc_iv[IV_SIZE];
     void *fek_enc;
     size_t fek_enc_size;
-    void *data_enc_iv;
-    size_t data_enc_iv_size;
+    uint8_t data_enc_nonce[NONCE_SIZE];
     void *data_enc;
     size_t data_enc_size;
+    uint8_t tag[TAG_SIZE];
     struct _trx_pobj *pobj;
 } trx_file;
 
