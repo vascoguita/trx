@@ -19,6 +19,7 @@ typedef struct _trx_file
     uint8_t data_enc_nonce[NONCE_SIZE];
     void *data_enc;
     size_t data_enc_size;
+    unsigned long int version;
     uint8_t tag[TAG_SIZE];
     struct _trx_pobj *pobj;
 } trx_file;

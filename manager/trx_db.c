@@ -1,6 +1,7 @@
 #include "trx_db.h"
 #include "trx_tss.h"
 #include "trx_path.h"
+#include "trx_ibme.h"
 #include "utils.h"
 #include "trx_manager_ta.h"
 #include "trx_manager_defaults.h"
@@ -353,6 +354,158 @@ int trx_db_load(trx_db *db)
     }
 
     trx_tss_clear(tss);
+    return 0;
+}
+
+int trx_db_share(trx_db *db, char *R, size_t R_size)
+{
+    TEE_Result res;
+    uint32_t buffer_size;
+    trx_ibme *ibme;
+    Cipher *bk_enc;
+    trx_pobj *pobj;
+    TEE_UUID uuid = TA_TRX_MANAGER_UUID;
+    uint8_t buffer[HMACSHA256_KEY_SIZE];
+
+    buffer_size = HMACSHA256_KEY_SIZE;
+
+    res = TEE_GetObjectBufferAttribute(db->bk, TEE_ATTR_SECRET_VALUE, buffer, &buffer_size);
+    if (res != TEE_SUCCESS)
+    {
+        return 1;
+    }
+
+    if (!(ibme = trx_ibme_init()))
+    {
+        return 1;
+    }
+    res = trx_ibme_load(ibme);
+    if (res != TEE_SUCCESS)
+    {
+        trx_ibme_clear(ibme);
+        return 1;
+    }
+    if (!(bk_enc = Cipher_init(*(ibme->pairing))))
+    {
+        trx_ibme_clear(ibme);
+        return 1;
+    }
+    if (1 == ibme_enc(*(ibme->pairing), ibme->mpk, ibme->ek, (unsigned char *)R, R_size, buffer, buffer_size, bk_enc))
+    {
+        Cipher_clear(bk_enc);
+        trx_ibme_clear(ibme);
+        return 1;
+    }
+    trx_ibme_clear(ibme);
+
+    if (trx_db_load(db) != 0)
+    {
+        Cipher_clear(bk_enc);
+        return 1;
+    }
+    if (!(pobj = trx_db_get(&uuid, DEFAULT_DB_ID, strlen(DEFAULT_DB_ID) + 1, db)))
+    {
+        Cipher_clear(bk_enc);
+        return 1;
+    }
+    if (trx_file_load(pobj->file))
+    {
+        Cipher_clear(bk_enc);
+        return 1;
+    }
+
+    if ((pobj->file->bk_enc_size = Cipher_snprint(NULL, 0, bk_enc) + 1) < 1)
+    {
+        Cipher_clear(bk_enc);
+        return 1;
+    }
+    if (!(pobj->file->bk_enc = malloc(pobj->file->bk_enc_size)))
+    {
+        Cipher_clear(bk_enc);
+        return 1;
+    }
+    if (pobj->file->bk_enc_size != (size_t)(Cipher_snprint(pobj->file->bk_enc, pobj->file->bk_enc_size, bk_enc) + 1))
+    {
+        Cipher_clear(bk_enc);
+        return 1;
+    }
+    Cipher_clear(bk_enc);
+
+    if (trx_file_save(pobj->file))
+    {
+        return 1;
+    }
+
+    return 0;
+}
+
+int trx_db_import(trx_db *db, char *S, size_t S_size)
+{   
+    TEE_UUID uuid = TA_TRX_MANAGER_UUID;
+    uint32_t buffer_size;
+    size_t tmp_size;
+    trx_pobj *pobj;
+    trx_ibme *ibme;
+    Cipher *bk_enc;
+    TEE_Result res;
+    uint8_t buffer[HMACSHA256_KEY_SIZE];
+    TEE_Attribute attr = {};
+
+    buffer_size = HMACSHA256_KEY_SIZE;
+    
+    if (!(pobj = trx_db_insert(&uuid, DEFAULT_DB_ID, strlen(DEFAULT_DB_ID) + 1, db)))
+    {
+        return 1;
+    }
+    if (!(pobj->file->ree_basename = strdup("0")))
+    {
+        return 1;
+    }
+    pobj->file->ree_basename_size = strlen(pobj->file->ree_basename) + 1;
+
+    if (trx_file_load(pobj->file))
+    {
+        return 1;
+    }
+
+    if (!(ibme = trx_ibme_init()))
+    {
+        return 1;
+    }
+    res = trx_ibme_load(ibme);
+    if (res != TEE_SUCCESS)
+    {
+        trx_ibme_clear(ibme);
+        return 1;
+    }
+    if (!(bk_enc = Cipher_init(*(ibme->pairing))))
+    {
+        trx_ibme_clear(ibme);
+        return 1;
+    }
+    if (0 == Cipher_set_str(pobj->file->bk_enc, pobj->file->bk_enc_size, bk_enc))
+    {
+        Cipher_clear(bk_enc);
+        trx_ibme_clear(ibme);
+        return 1;
+    }
+
+    tmp_size = buffer_size;
+    if (ibme_dec(*(ibme->pairing), ibme->dk, (unsigned char *)S, S_size, bk_enc, (unsigned char *)buffer, &tmp_size) != 0)
+    {
+        Cipher_clear(bk_enc);
+        trx_ibme_clear(ibme);
+        return 1;
+    }
+    Cipher_clear(bk_enc);
+    trx_ibme_clear(ibme);
+
+    TEE_InitRefAttribute(&attr, TEE_ATTR_SECRET_VALUE, buffer, buffer_size);
+    res = TEE_PopulateTransientObject(db->bk, &attr, 1);
+    if (res != TEE_SUCCESS)
+    {
+        return 1;
+    }
     return 0;
 }
 

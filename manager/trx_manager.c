@@ -391,22 +391,14 @@ TEE_Result list(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
 
 TEE_Result mount(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
 {
-    TEE_UUID uuid = TA_TRX_MANAGER_UUID;
-    uint32_t exp_param_types, buffer_size;
+    uint32_t exp_param_types;
     char *S, *ree_dirname, *mount_point;
-    size_t S_size, ree_dirname_size, mount_point_size, tmp_size;
+    size_t S_size, ree_dirname_size, mount_point_size;
     trx_db *db;
     db_list_head *db_lh;
-    trx_pobj *pobj;
-    trx_ibme *ibme;
-    Cipher *bk_enc;
     TEE_Result res;
-    uint8_t buffer[HMACSHA256_KEY_SIZE];
-    TEE_Attribute attr = {};
 
     (void)&sess_ctx;
-
-    buffer_size = HMACSHA256_KEY_SIZE;
 
     DMSG("has been called");
 
@@ -424,11 +416,17 @@ TEE_Result mount(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
     mount_point = params[2].memref.buffer;
     mount_point_size = (size_t)params[2].memref.size;
 
+    if(!trx_authorization_mount(mount_point, S)) {
+        EMSG("TA_TRX_MANAGER_CMD_MOUNT failed calling function \'trx_authorization_mount\'");
+        return TEE_ERROR_GENERIC;
+    }
+
     if (!(db = trx_db_init()))
     {
         EMSG("TA_TRX_MANAGER_CMD_MOUNT failed calling function \'trx_db_init\'");
         return TEE_ERROR_GENERIC;
     }
+
     if (!(db->mount_point = strndup(mount_point, mount_point_size)))
     {
         EMSG("TA_TRX_MANAGER_CMD_MOUNT failed calling function \'strdup\'");
@@ -439,82 +437,6 @@ TEE_Result mount(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
     db->ree_dirname = strndup(ree_dirname, ree_dirname_size);
     db->ree_dirname_size = ree_dirname_size;
 
-    if (!(pobj = trx_db_insert(&uuid, DEFAULT_DB_ID, strlen(DEFAULT_DB_ID) + 1, db)))
-    {
-        trx_db_clear(db);
-        return TEE_ERROR_GENERIC;
-    }
-    if (!(pobj->file->ree_basename = strdup("0")))
-    {
-        EMSG("TA_TRX_MANAGER_CMD_MOUNT failed calling function \'strdup\'");
-        trx_db_clear(db);
-        return TEE_ERROR_GENERIC;
-    }
-    pobj->file->ree_basename_size = strlen(pobj->file->ree_basename) + 1;
-
-    if (trx_file_load(pobj->file))
-    {
-        EMSG("TA_TRX_MANAGER_CMD_MOUNT failed calling function \'trx_file_load\'");
-        trx_db_clear(db);
-        return TEE_ERROR_GENERIC;
-    }
-
-    if (!(ibme = trx_ibme_init()))
-    {
-        EMSG("TA_TRX_MANAGER_CMD_MOUNT failed calling function \'trx_ibme_init\'");
-        trx_db_clear(db);
-        return TEE_ERROR_GENERIC;
-    }
-    res = trx_ibme_load(ibme);
-    if (res != TEE_SUCCESS)
-    {
-        EMSG("TA_TRX_MANAGER_CMD_MOUNT failed calling function \'trx_ibme_load\'");
-        trx_ibme_clear(ibme);
-        trx_db_clear(db);
-        return TEE_ERROR_GENERIC;
-    }
-    if (!(bk_enc = Cipher_init(*(ibme->pairing))))
-    {
-        EMSG("TA_TRX_MANAGER_CMD_MOUNT failed calling function \'Cipher_init\'");
-        trx_ibme_clear(ibme);
-        trx_db_clear(db);
-        return TEE_ERROR_GENERIC;
-    }
-    if (0 == Cipher_set_str(pobj->file->bk_enc, pobj->file->bk_enc_size, bk_enc))
-    {
-        EMSG("TA_TRX_MANAGER_CMD_MOUNT failed calling function \'Cipher_set_str\'");
-        Cipher_clear(bk_enc);
-        trx_ibme_clear(ibme);
-        trx_db_clear(db);
-        return TEE_ERROR_GENERIC;
-    }
-
-    tmp_size = buffer_size;
-    if (ibme_dec(*(ibme->pairing), ibme->dk, (unsigned char *)S, S_size, bk_enc, (unsigned char *)buffer, &tmp_size) != 0)
-    {
-        EMSG("TA_TRX_MANAGER_CMD_MOUNT failed to decrypt the cipher using sender identity \"%s\".", S);
-        Cipher_clear(bk_enc);
-        trx_ibme_clear(ibme);
-        trx_db_clear(db);
-        return TEE_ERROR_GENERIC;
-    }
-    Cipher_clear(bk_enc);
-    trx_ibme_clear(ibme);
-
-    if(!trx_authorization_mount(mount_point, S)) {
-        EMSG("TA_TRX_MANAGER_CMD_MOUNT failed calling function \'trx_authorization_mount\'");
-        trx_db_clear(db);
-    }
-
-    TEE_InitRefAttribute(&attr, TEE_ATTR_SECRET_VALUE, buffer, buffer_size);
-    res = TEE_PopulateTransientObject(db->bk, &attr, 1);
-    if (res != TEE_SUCCESS)
-    {
-        EMSG("TA_TRX_MANAGER_CMD_MOUNT failed calling function \'TEE_PopulateTransientObject\'");
-        trx_db_clear(db);
-        return TEE_ERROR_GENERIC;
-    }
-
     if (!(db_lh = trx_db_list_init()))
     {
         EMSG("TA_TRX_MANAGER_CMD_MOUNT failed calling function \'trx_db_list_init\'");
@@ -524,6 +446,7 @@ TEE_Result mount(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
     if (trx_db_list_load(db_lh) != TEE_SUCCESS)
     {
         EMSG("TA_TRX_MANAGER_CMD_MOUNT failed calling function \'trx_db_list_load\'");
+        trx_db_clear(db);
         trx_db_list_clear(db_lh);
         return TEE_ERROR_GENERIC;
     }
@@ -534,6 +457,13 @@ TEE_Result mount(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
         trx_db_list_clear(db_lh);
         return TEE_ERROR_GENERIC;
     }
+    if(trx_db_import(db, S, S_size) != 0)
+    {
+        EMSG("TA_TRX_MANAGER_CMD_MOUNT failed calling function \'trx_db_import\'");
+        trx_db_list_clear(db_lh);
+        return TEE_ERROR_GENERIC;
+    }
+
     res = trx_db_list_save(db_lh);
     if (res != TEE_SUCCESS)
     {
@@ -547,20 +477,12 @@ TEE_Result mount(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
 
 TEE_Result share(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
 {
-    uint32_t exp_param_types, buffer_size;
-    TEE_Result res;
+    uint32_t exp_param_types;
     char *R, *mount_point;
     size_t R_size, mount_point_size;
     db_list_head *db_lh;
     trx_db *db;
-    trx_ibme *ibme;
-    Cipher *bk_enc;
-    TEE_UUID uuid = TA_TRX_MANAGER_UUID;
-    trx_pobj *pobj;
-    uint8_t buffer[HMACSHA256_KEY_SIZE];
-
-    buffer_size = HMACSHA256_KEY_SIZE;
-
+    
     (void)&sess_ctx;
 
     DMSG("has been called");
@@ -588,96 +510,12 @@ TEE_Result share(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
         trx_db_list_clear(db_lh);
         return TEE_ERROR_GENERIC;
     }
-    if ((db = trx_db_list_get(mount_point, mount_point_size, db_lh)) == NULL)
+    if (!(db = trx_db_list_get(mount_point, mount_point_size, db_lh)))
     {
         EMSG("TA_TRX_MANAGER_CMD_SHARE failed calling function \'trx_db_list_get\'");
         trx_db_list_clear(db_lh);
         return TEE_ERROR_GENERIC;
     }
-
-    res = TEE_GetObjectBufferAttribute(db->bk, TEE_ATTR_SECRET_VALUE, buffer, &buffer_size);
-    if (res != TEE_SUCCESS)
-    {
-        EMSG("TA_TRX_MANAGER_CMD_SHARE failed calling function \'TEE_GetObjectBufferAttribute\'");
-        trx_db_list_clear(db_lh);
-        return TEE_ERROR_GENERIC;
-    }
-
-    if (!(ibme = trx_ibme_init()))
-    {
-        EMSG("TA_TRX_MANAGER_CMD_SHARE failed calling function \'trx_ibme_init\'");
-        trx_db_list_clear(db_lh);
-        return TEE_ERROR_GENERIC;
-    }
-    res = trx_ibme_load(ibme);
-    if (res != TEE_SUCCESS)
-    {
-        EMSG("TA_TRX_MANAGER_CMD_SHARE failed calling function \'trx_ibme_load\'");
-        trx_ibme_clear(ibme);
-        trx_db_list_clear(db_lh);
-        return TEE_ERROR_GENERIC;
-    }
-    if (!(bk_enc = Cipher_init(*(ibme->pairing))))
-    {
-        EMSG("TA_TRX_MANAGER_CMD_SHARE failed calling function \'Cipher_init\'");
-        trx_ibme_clear(ibme);
-        trx_db_list_clear(db_lh);
-        return TEE_ERROR_GENERIC;
-    }
-    if (1 == ibme_enc(*(ibme->pairing), ibme->mpk, ibme->ek, (unsigned char *)R, R_size, buffer, buffer_size, bk_enc))
-    {
-        EMSG("TA_TRX_MANAGER_CMD_SHARE failed calling function \'ibme_enc\'");
-        Cipher_clear(bk_enc);
-        trx_ibme_clear(ibme);
-        trx_db_list_clear(db_lh);
-        return TEE_ERROR_GENERIC;
-    }
-    trx_ibme_clear(ibme);
-
-    if (trx_db_load(db) != 0)
-    {
-        EMSG("TA_TRX_MANAGER_CMD_SHARE failed calling function \'trx_db_load\'");
-        Cipher_clear(bk_enc);
-        trx_db_list_clear(db_lh);
-        return TEE_ERROR_GENERIC;
-    }
-    if (!(pobj = trx_db_get(&uuid, DEFAULT_DB_ID, strlen(DEFAULT_DB_ID) + 1, db)))
-    {
-        EMSG("TA_TRX_MANAGER_CMD_SHARE failed calling function \'trx_db_get\'");
-        Cipher_clear(bk_enc);
-        trx_db_list_clear(db_lh);
-        return TEE_ERROR_GENERIC;
-    }
-    if (trx_file_load(pobj->file))
-    {
-        EMSG("TA_TRX_MANAGER_CMD_SHARE failed calling function \'trx_file_load\'");
-        Cipher_clear(bk_enc);
-        trx_db_list_clear(db_lh);
-        return TEE_ERROR_GENERIC;
-    }
-
-    if ((pobj->file->bk_enc_size = Cipher_snprint(NULL, 0, bk_enc) + 1) < 1)
-    {
-        EMSG("TA_TRX_MANAGER_CMD_SHARE failed calling function \'Cipher_snprint\'");
-        Cipher_clear(bk_enc);
-        trx_db_list_clear(db_lh);
-        return TEE_ERROR_GENERIC;
-    }
-    if (!(pobj->file->bk_enc = malloc(pobj->file->bk_enc_size)))
-    {
-        EMSG("TA_TRX_MANAGER_CMD_SHARE failed calling function \'malloc\'");
-        Cipher_clear(bk_enc);
-        trx_db_list_clear(db_lh);
-        return TEE_ERROR_GENERIC;
-    }
-    if (pobj->file->bk_enc_size != (size_t)(Cipher_snprint(pobj->file->bk_enc, pobj->file->bk_enc_size, bk_enc) + 1))
-    {
-        EMSG("TA_TRX_MANAGER_CMD_SHARE failed calling function \'Cipher_snprint\'");
-        Cipher_clear(bk_enc);
-        trx_db_list_clear(db_lh);
-        return TEE_ERROR_GENERIC;
-    }
-    Cipher_clear(bk_enc);
 
     if(!trx_authorization_share(mount_point, R)) {
         EMSG("TA_TRX_MANAGER_CMD_SHARE failed calling function \'trx_authorization_share\'");
@@ -685,12 +523,13 @@ TEE_Result share(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
         return TEE_ERROR_GENERIC;
     }
 
-    if (trx_file_save(pobj->file))
+    if(trx_db_share(db, R, R_size) != 0)
     {
-        EMSG("TA_TRX_MANAGER_CMD_SHARE failed calling function \'trx_file_save\'");
+        EMSG("TA_TRX_MANAGER_CMD_SHARE failed calling function \'trx_db_share\'");
         trx_db_list_clear(db_lh);
         return TEE_ERROR_GENERIC;
     }
+
     trx_db_list_clear(db_lh);
     return TEE_SUCCESS;
 }

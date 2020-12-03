@@ -26,6 +26,7 @@ trx_file *trx_file_init(void)
     file->data_enc = NULL;
     file->data_enc_size = 0;
     file->pobj = NULL;
+    file->version = 0;
     return file;
 }
 
@@ -237,6 +238,9 @@ TEE_Result trx_file_encrypt(trx_file *file)
         TEE_FreeTransientObject(fek);
         return res;
     }
+    file->version = file->pobj->version;
+    TEE_AEUpdateAAD(op_handle, &(file->version), sizeof(unsigned long int));
+
     tmp_data_enc_size = file->data_enc_size;
     tmp_tag_size = TAG_SIZE;
     res = TEE_AEEncryptFinal(op_handle, file->data_enc, file->data_enc_size, file->data_enc, &tmp_data_enc_size, file->tag, &tmp_tag_size);
@@ -357,6 +361,10 @@ TEE_Result trx_file_decrypt(trx_file *file)
     fek_buffer_size = AES_KEY_SIZE;
     tsk_buffer_size = HMACSHA256_TAG_SIZE;
 
+    if(file->version < file->pobj->version) {
+        return TEE_ERROR_GENERIC;
+    }
+
     // Generate TSK
 
     res = TEE_AllocateOperation(&op_handle, TEE_ALG_HMAC_SHA256, TEE_MODE_MAC, HMACSHA256_KEY_BIT_SIZE);
@@ -460,6 +468,9 @@ TEE_Result trx_file_decrypt(trx_file *file)
         TEE_FreeTransientObject(fek);
         return res;
     }
+
+    TEE_AEUpdateAAD(op_handle, &(file->version), sizeof(unsigned long int));
+
     tmp_data_enc_size = file->data_enc_size;
     res = TEE_AEDecryptFinal(op_handle, file->data_enc, file->data_enc_size, file->data_enc, &tmp_data_enc_size, file->tag, TAG_SIZE);
     if ((res != TEE_SUCCESS) || (tmp_data_enc_size != file->data_enc_size))
@@ -486,6 +497,7 @@ TEE_Result trx_file_decrypt(trx_file *file)
     {
         return TEE_ERROR_GENERIC;
     }
+    file->pobj->version = file->version;
     return res;
 }
 
@@ -500,7 +512,8 @@ int trx_file_serialize(trx_file *file, void *data, size_t *data_size)
     }
     tmp_data_size = sizeof(size_t) + file->bk_enc_size + IV_SIZE +
                     sizeof(size_t) + file->fek_enc_size + NONCE_SIZE +
-                    sizeof(size_t) + file->data_enc_size + TAG_SIZE;
+                    sizeof(size_t) + file->data_enc_size + TAG_SIZE+
+                    sizeof(unsigned long int);
 
     if (!data && !(*data_size))
     {
@@ -533,6 +546,8 @@ int trx_file_serialize(trx_file *file, void *data, size_t *data_size)
     cpy_ptr += file->data_enc_size;
     memcpy(cpy_ptr, file->tag, TAG_SIZE);
     cpy_ptr += TAG_SIZE;
+    memcpy(cpy_ptr, &(file->version), sizeof(unsigned long int));
+    cpy_ptr += sizeof(unsigned long int);
     return 0;
 }
 
@@ -631,6 +646,14 @@ int trx_file_deserialize(trx_file *file, void *data, size_t data_size)
     memcpy(file->tag, cpy_ptr, TAG_SIZE);
     cpy_ptr += TAG_SIZE;
     left -= TAG_SIZE;
+
+    if (left < sizeof(unsigned long int))
+    {
+        return 1;
+    }
+    memcpy(&(file->version), cpy_ptr, sizeof(unsigned long int));
+    cpy_ptr += sizeof(unsigned long int);
+    left -= sizeof(unsigned long int);
 
     if (left != 0)
     {

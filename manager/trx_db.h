@@ -39,6 +39,9 @@ int trx_db_gen_ree_basename(trx_db *db, struct _trx_file *file);
 int trx_db_save(trx_db *db);
 int trx_db_load(trx_db *db);
 
+int trx_db_share(trx_db *db, char *R, size_t R_size);
+int trx_db_import(trx_db *db, char *S, size_t S_size);
+
 typedef struct _db_entry
 {
     trx_db *db;
