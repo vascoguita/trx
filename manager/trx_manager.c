@@ -13,8 +13,8 @@
 #include "trx_db.h"
 #include "trx_ibme.h"
 #include "trx_file.h"
+#include "trx_authorization.h"
 #include <ibme/ibme.h>
-#include <tui/tui.h>
 
 TEE_Result setup(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
 {
@@ -393,8 +393,8 @@ TEE_Result mount(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
 {
     TEE_UUID uuid = TA_TRX_MANAGER_UUID;
     uint32_t exp_param_types, buffer_size;
-    char *S, *ree_dirname, *mount_point, *auth_msg;
-    size_t S_size, ree_dirname_size, mount_point_size, tmp_size, input_size, auth_msg_size;
+    char *S, *ree_dirname, *mount_point;
+    size_t S_size, ree_dirname_size, mount_point_size, tmp_size;
     trx_db *db;
     db_list_head *db_lh;
     trx_pobj *pobj;
@@ -403,11 +403,9 @@ TEE_Result mount(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
     TEE_Result res;
     uint8_t buffer[HMACSHA256_KEY_SIZE];
     TEE_Attribute attr = {};
-    char input[100];
 
     (void)&sess_ctx;
 
-    input_size = 100;
     buffer_size = HMACSHA256_KEY_SIZE;
 
     DMSG("has been called");
@@ -503,44 +501,9 @@ TEE_Result mount(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
     Cipher_clear(bk_enc);
     trx_ibme_clear(ibme);
 
-    if ((auth_msg_size = snprintf(NULL, 0, "Authorize Secure Storage Volume from \"%s\" to be mounted on \"%s\"? [y\\n] ", S, mount_point) + 1) < 1)
-    {
-        EMSG("TA_TRX_MANAGER_CMD_MOUNT failed calling function \'snprintf\'");
+    if(!trx_authorization_mount(mount_point, S)) {
+        EMSG("TA_TRX_MANAGER_CMD_MOUNT failed calling function \'trx_authorization_mount\'");
         trx_db_clear(db);
-        return TEE_ERROR_GENERIC;
-    }
-    if (!(auth_msg = malloc(auth_msg_size)))
-    {
-        EMSG("TA_TRX_MANAGER_CMD_MOUNT failed calling function \'malloc\'");
-        trx_db_clear(db);
-        return TEE_ERROR_GENERIC;
-    }
-    if (auth_msg_size != ((size_t)snprintf(auth_msg, auth_msg_size, "Authorize Secure Storage Volume from \"%s\" to be mounted on "
-                                                                    "\"%s\"? [y\\n] ",
-                                           S, mount_point) +
-                          1))
-    {
-        EMSG("TA_TRX_MANAGER_CMD_MOUNT failed calling function \'snprintf\'");
-        DMSG("\"%s\"\n%zu", auth_msg, auth_msg_size);
-        free(auth_msg);
-        trx_db_clear(db);
-        return TEE_ERROR_GENERIC;
-    }
-
-    res = TUI->input(auth_msg, input, input_size);
-    if (res != TEE_SUCCESS)
-    {
-        EMSG("TA_TRX_MANAGER_CMD_MOUNT Failed to input with code 0x%x", res);
-        free(auth_msg);
-        trx_db_clear(db);
-        return res;
-    }
-    free(auth_msg);
-    if (strncmp(input, "y", strlen("y")) != 0)
-    {
-        EMSG("TA_TRX_MANAGER_CMD_MOUNT not authorized by user");
-        trx_db_clear(db);
-        return TEE_ERROR_GENERIC;
     }
 
     TEE_InitRefAttribute(&attr, TEE_ATTR_SECRET_VALUE, buffer, buffer_size);
@@ -586,8 +549,8 @@ TEE_Result share(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
 {
     uint32_t exp_param_types, buffer_size;
     TEE_Result res;
-    char *R, *mount_point, *auth_msg;
-    size_t R_size, mount_point_size, auth_msg_size, input_size;
+    char *R, *mount_point;
+    size_t R_size, mount_point_size;
     db_list_head *db_lh;
     trx_db *db;
     trx_ibme *ibme;
@@ -595,9 +558,7 @@ TEE_Result share(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
     TEE_UUID uuid = TA_TRX_MANAGER_UUID;
     trx_pobj *pobj;
     uint8_t buffer[HMACSHA256_KEY_SIZE];
-    char input[100];
 
-    input_size = 100;
     buffer_size = HMACSHA256_KEY_SIZE;
 
     (void)&sess_ctx;
@@ -718,48 +679,8 @@ TEE_Result share(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
     }
     Cipher_clear(bk_enc);
 
-    DMSG("Authorize Secure Storage Volume mounted on "
-         "\"%s\" to be shared with \"%s\"? [y\\n] ",
-         mount_point, R);
-    if ((auth_msg_size = snprintf(NULL, 0, "Authorize Secure Storage Volume mounted on "
-                                           "\"%s\" to be shared with \"%s\"? [y\\n] ",
-                                  mount_point, R) +
-                         1) < 1)
-    {
-        EMSG("TA_TRX_MANAGER_CMD_SHARE failed calling function \'snprintf\'");
-        trx_db_list_clear(db_lh);
-        return TEE_ERROR_GENERIC;
-    }
-    if (!(auth_msg = malloc(auth_msg_size)))
-    {
-        EMSG("TA_TRX_MANAGER_CMD_SHARE failed calling function \'malloc\'");
-        trx_db_list_clear(db_lh);
-        return TEE_ERROR_GENERIC;
-    }
-    if (auth_msg_size != ((size_t)snprintf(auth_msg, auth_msg_size, "Authorize Secure Storage Volume mounted on "
-                                                                    "\"%s\" to be shared with \"%s\"? [y\\n] ",
-                                           mount_point, R) +
-                          1))
-    {
-        EMSG("TA_TRX_MANAGER_CMD_SHARE failed calling function \'snprintf\'");
-        DMSG("\"%s\"\n%zu", auth_msg, auth_msg_size);
-        free(auth_msg);
-        trx_db_list_clear(db_lh);
-        return TEE_ERROR_GENERIC;
-    }
-
-    res = TUI->input(auth_msg, input, input_size);
-    if (res != TEE_SUCCESS)
-    {
-        EMSG("TA_TRX_MANAGER_CMD_SHARE Failed to input with code 0x%x", res);
-        free(auth_msg);
-        trx_db_list_clear(db_lh);
-        return res;
-    }
-    free(auth_msg);
-    if (strncmp(input, "y", strlen("y")) != 0)
-    {
-        EMSG("TA_TRX_MANAGER_CMD_MOUNT not authorized by user");
+    if(!trx_authorization_share(mount_point, R)) {
+        EMSG("TA_TRX_MANAGER_CMD_SHARE failed calling function \'trx_authorization_share\'");
         trx_db_list_clear(db_lh);
         return TEE_ERROR_GENERIC;
     }

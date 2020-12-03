@@ -16,6 +16,7 @@ typedef struct _trx_pobj
     struct _trx_tss *tss;
     void *data;
     size_t data_size;
+    unsigned long int version;
     struct _trx_file *file;
 } trx_pobj;
 

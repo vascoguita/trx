@@ -54,7 +54,8 @@ int trx_db_gen_ree_basename(trx_db *db, trx_file *file)
 {
     unsigned long int next_ree_basename_n;
 
-    if(!(file->ree_basename = strndup(db->next_ree_basename, db->next_ree_basename_size))) {
+    if (!(file->ree_basename = strndup(db->next_ree_basename, db->next_ree_basename_size)))
+    {
         return 1;
     }
     file->ree_basename_size = db->next_ree_basename_size;
@@ -292,6 +293,7 @@ int trx_db_load(trx_db *db)
     {
         return 1;
     }
+
     memcpy(tss->uuid, &uuid, sizeof(TEE_UUID));
     tss->db = db;
 
@@ -315,19 +317,23 @@ int trx_db_load(trx_db *db)
         trx_tss_clear(tss);
         return 1;
     }
+
     pobj->file->ree_basename_size = strlen(pobj->file->ree_basename) + 1;
     if (trx_pobj_load(pobj) != 0)
     {
         trx_tss_clear(tss);
         return 1;
     }
+
     if (trx_db_set_str(pobj->data, pobj->data_size, db) == 0)
     {
         trx_tss_clear(tss);
         return 1;
     }
+
     if (pobj->file->bk_enc && pobj->file->bk_enc_size)
     {
+
         if (!(pobj2 = trx_db_get(&uuid, DEFAULT_DB_ID, DEFAULT_DB_ID_SIZE, db)))
         {
             trx_tss_clear(tss);
@@ -345,11 +351,8 @@ int trx_db_load(trx_db *db)
 
         memcpy(pobj2->file->bk_enc, pobj->file->bk_enc, pobj2->file->bk_enc_size);
     }
-    
 
     trx_tss_clear(tss);
-    
-
     return 0;
 }
 
@@ -740,17 +743,21 @@ trx_pobj *trx_db_list_insert_pobj(TEE_UUID *uuid, char *path, size_t path_size, 
     {
         return NULL;
     }
+
     mount_point_size = strlen(mount_point) + 1;
     if (!(db = trx_db_list_get(mount_point, mount_point_size, h)))
     {
         return NULL;
     }
+
     if (!(id = basename(path)))
     {
         return NULL;
     }
+
     id_size = strlen(id) + 1;
     //FIXME
+
     if (trx_db_get(&manager_uuid, DEFAULT_DB_ID, DEFAULT_DB_ID_SIZE, db) == NULL)
     {
 
@@ -759,6 +766,7 @@ trx_pobj *trx_db_list_insert_pobj(TEE_UUID *uuid, char *path, size_t path_size, 
             return NULL;
         }
     }
+
     return trx_db_insert(uuid, id, id_size, db);
 }
 

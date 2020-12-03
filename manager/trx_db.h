@@ -24,6 +24,7 @@ typedef struct _trx_db
     size_t mount_point_size;
     char *ree_dirname;
     size_t ree_dirname_size;
+    struct _trx_pobj *pobj;
     TEE_ObjectHandle bk;
 } trx_db;
 

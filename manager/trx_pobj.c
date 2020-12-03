@@ -29,6 +29,7 @@ trx_pobj *trx_pobj_init(void)
     pobj->tss = NULL;
     pobj->data = NULL;
     pobj->data_size = 0;
+    pobj->version = 0;
     return pobj;
 }
 
@@ -47,6 +48,8 @@ int trx_pobj_save(trx_pobj *pobj)
 {
     TEE_Result res;
     
+    pobj->version++;
+
     res = trx_file_encrypt(pobj->file);
     if (res != TEE_SUCCESS)
     {
@@ -140,6 +143,18 @@ int trx_pobj_snprint(char *s, size_t n, trx_pobj *pobj)
         return status;
     }
     clip_sub(&result, status, &left, n);
+    status = snprintf(s + result, left, "%lu", pobj->version);
+    if (status < 0)
+    {
+        return status;
+    }
+    clip_sub(&result, status, &left, n);
+    status = snprintf(s + result, left, ", ");
+    if (status < 0)
+    {
+        return status;
+    }
+    clip_sub(&result, status, &left, n);
     status = snprintf(s + result, left, "%10zu", pobj->data_size);
     if (status < 0)
     {
@@ -217,7 +232,15 @@ int trx_pobj_set_str(char *s, size_t n, trx_pobj *pobj)
     }
     status = strlen(pobj->file->ree_basename);
     clip_sub(&result, status, &left, n);
-
+    status = strlen(", ");
+    if (strncmp(s + result, ", ", status) != 0)
+    {
+        return 0;
+    }
+    clip_sub(&result, status, &left, n);
+    pobj->version = strtoul(s + result, NULL, 0);
+    status = snprintf(NULL, 0, "%zu", pobj->version);
+    clip_sub(&result, status, &left, n);
     status = strlen(", ");
     if (strncmp(s + result, ", ", status) != 0)
     {
