@@ -5,6 +5,7 @@
 #include "utils.h"
 #include "trx_manager_ta.h"
 #include "trx_manager_defaults.h"
+#include "trx_keys.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -24,7 +25,7 @@ trx_db *trx_db_init(void)
         trx_db_clear(db);
         return NULL;
     }
-    if (TEE_AllocateTransientObject(TEE_TYPE_HMAC_SHA256, HMACSHA256_KEY_BIT_SIZE, &(db->bk)) != TEE_SUCCESS)
+    if (!(db->bk = trx_bk_init()))
     {
         trx_db_clear(db);
         return NULL;
@@ -46,20 +47,20 @@ void trx_db_clear(trx_db *db)
         free(db->next_ree_basename);
         free(db->mount_point);
         free(db->ree_dirname);
-        TEE_FreeTransientObject(db->bk);
+        trx_bk_clear(db->bk);
     }
     free(db);
 }
 
-int trx_db_gen_ree_basename(trx_db *db, trx_file *file)
+int trx_db_gen_ree_basename(trx_db *db, trx_pobj *pobj)
 {
     unsigned long int next_ree_basename_n;
 
-    if (!(file->ree_basename = strndup(db->next_ree_basename, db->next_ree_basename_size)))
+    if (!(pobj->ree_basename = strndup(db->next_ree_basename, db->next_ree_basename_size)))
     {
         return 1;
     }
-    file->ree_basename_size = db->next_ree_basename_size;
+    pobj->ree_basename_size = db->next_ree_basename_size;
 
     next_ree_basename_n = strtoul(db->next_ree_basename, NULL, 10) + 1;
 
@@ -106,7 +107,7 @@ trx_pobj *trx_db_insert(const TEE_UUID *uuid, const char *id, size_t id_size, tr
         return NULL;
     }
 
-    if (trx_db_gen_ree_basename(db, pobj->file) != 0)
+    if (trx_db_gen_ree_basename(db, pobj) != 0)
     {
         trx_pobj_clear(pobj);
         return NULL;
@@ -286,7 +287,7 @@ int trx_db_save(trx_db *db)
 
 int trx_db_load(trx_db *db)
 {
-    trx_pobj *pobj, *pobj2;
+    trx_pobj *pobj;
     trx_tss *tss;
     TEE_UUID uuid = TA_TRX_MANAGER_UUID;
 
@@ -310,49 +311,24 @@ int trx_db_load(trx_db *db)
         trx_tss_clear(tss);
         return 1;
     }
-
     pobj->tss = tss;
 
-    if (!(pobj->file->ree_basename = strdup("0")))
+    if (!(pobj->ree_basename = strdup("0")))
     {
         trx_tss_clear(tss);
         return 1;
     }
-
-    pobj->file->ree_basename_size = strlen(pobj->file->ree_basename) + 1;
+    pobj->ree_basename_size = strlen(pobj->ree_basename) + 1;
     if (trx_pobj_load(pobj) != 0)
     {
         trx_tss_clear(tss);
         return 1;
     }
-
     if (trx_db_set_str(pobj->data, pobj->data_size, db) == 0)
     {
         trx_tss_clear(tss);
         return 1;
     }
-
-    if (pobj->file->bk_enc && pobj->file->bk_enc_size)
-    {
-
-        if (!(pobj2 = trx_db_get(&uuid, DEFAULT_DB_ID, DEFAULT_DB_ID_SIZE, db)))
-        {
-            trx_tss_clear(tss);
-            return 1;
-        }
-
-        pobj2->file->bk_enc_size = pobj->file->bk_enc_size;
-        free(pobj2->file->bk_enc);
-
-        if (!(pobj2->file->bk_enc = malloc(pobj2->file->bk_enc_size)))
-        {
-            trx_tss_clear(tss);
-            return 1;
-        }
-
-        memcpy(pobj2->file->bk_enc, pobj->file->bk_enc, pobj2->file->bk_enc_size);
-    }
-
     trx_tss_clear(tss);
     return 0;
 }
@@ -363,13 +339,16 @@ int trx_db_share(trx_db *db, char *R, size_t R_size)
     uint32_t buffer_size;
     trx_ibme *ibme;
     Cipher *bk_enc;
-    trx_pobj *pobj;
-    TEE_UUID uuid = TA_TRX_MANAGER_UUID;
-    uint8_t buffer[HMACSHA256_KEY_SIZE];
+    uint8_t buffer[trx_bk_size];
+    void *data = NULL;
+    size_t data_size;
+    char *ree_path = NULL;
+    size_t ree_path_size;
+    int fd;
 
-    buffer_size = HMACSHA256_KEY_SIZE;
+    buffer_size = trx_bk_size;
 
-    res = TEE_GetObjectBufferAttribute(db->bk, TEE_ATTR_SECRET_VALUE, buffer, &buffer_size);
+    res = trx_bk_to_bytes(db->bk, buffer, &buffer_size);
     if (res != TEE_SUCCESS)
     {
         return 1;
@@ -390,7 +369,8 @@ int trx_db_share(trx_db *db, char *R, size_t R_size)
         trx_ibme_clear(ibme);
         return 1;
     }
-    if (1 == ibme_enc(*(ibme->pairing), ibme->mpk, ibme->ek, (unsigned char *)R, R_size, buffer, buffer_size, bk_enc))
+    if (1 == ibme_enc(*(ibme->pairing), ibme->mpk, ibme->ek, (unsigned char *)R, R_size, buffer,
+                      buffer_size, bk_enc))
     {
         Cipher_clear(bk_enc);
         trx_ibme_clear(ibme);
@@ -398,49 +378,69 @@ int trx_db_share(trx_db *db, char *R, size_t R_size)
     }
     trx_ibme_clear(ibme);
 
-    if (trx_db_load(db) != 0)
-    {
-        Cipher_clear(bk_enc);
-        return 1;
-    }
-    if (!(pobj = trx_db_get(&uuid, DEFAULT_DB_ID, strlen(DEFAULT_DB_ID) + 1, db)))
-    {
-        Cipher_clear(bk_enc);
-        return 1;
-    }
-    if (trx_file_load(pobj->file))
+    if ((data_size = Cipher_snprint(NULL, 0, bk_enc) + 1) < 1)
     {
         Cipher_clear(bk_enc);
         return 1;
     }
 
-    if ((pobj->file->bk_enc_size = Cipher_snprint(NULL, 0, bk_enc) + 1) < 1)
+    if (!(data = malloc(data_size + sizeof(size_t))))
     {
         Cipher_clear(bk_enc);
         return 1;
     }
-    if (!(pobj->file->bk_enc = malloc(pobj->file->bk_enc_size)))
+
+    memcpy(data, &data_size, sizeof(size_t));
+
+    if (data_size != (size_t)(Cipher_snprint((char *)data + sizeof(size_t), data_size, bk_enc) + 1))
     {
+        free(data);
         Cipher_clear(bk_enc);
         return 1;
     }
-    if (pobj->file->bk_enc_size != (size_t)(Cipher_snprint(pobj->file->bk_enc, pobj->file->bk_enc_size, bk_enc) + 1))
-    {
-        Cipher_clear(bk_enc);
-        return 1;
-    }
+
     Cipher_clear(bk_enc);
 
-    if (trx_file_save(pobj->file))
+    if ((ree_path_size = snprintf(NULL, 0, "%s/%s", db->ree_dirname, DEFAULT_BK_BASENAME) + 1) < 1)
     {
+        free(data);
         return 1;
     }
+    if (!(ree_path = malloc(ree_path_size)))
+    {
+        free(data);
+        return 1;
+    }
+    if (ree_path_size != ((size_t)snprintf(ree_path, ree_path_size, "%s/%s", db->ree_dirname, DEFAULT_BK_BASENAME) + 1))
+    {
+        free(data);
+        free(ree_path);
+        return 1;
+    }
+
+    res = ree_fs_api_create(ree_path, ree_path_size, &fd);
+    if (res != TEE_SUCCESS)
+    {
+        free(data);
+        free(ree_path);
+        return 1;
+    }
+    free(ree_path);
+    res = ree_fs_api_write(fd, 0, data, data_size + sizeof(size_t));
+    if (res != TEE_SUCCESS)
+    {
+        free(data);
+        ree_fs_api_close(fd);
+        return 1;
+    }
+    free(data);
+    ree_fs_api_close(fd);
 
     return 0;
 }
 
 int trx_db_import(trx_db *db, char *S, size_t S_size)
-{   
+{
     TEE_UUID uuid = TA_TRX_MANAGER_UUID;
     uint32_t buffer_size;
     size_t tmp_size;
@@ -448,47 +448,97 @@ int trx_db_import(trx_db *db, char *S, size_t S_size)
     trx_ibme *ibme;
     Cipher *bk_enc;
     TEE_Result res;
-    uint8_t buffer[HMACSHA256_KEY_SIZE];
-    TEE_Attribute attr = {};
+    uint8_t buffer[trx_bk_size];
+    void *data = NULL;
+    size_t data_size;
+    char *ree_path = NULL;
+    size_t ree_path_size;
+    int fd;
 
-    buffer_size = HMACSHA256_KEY_SIZE;
-    
+    buffer_size = trx_bk_size;
+
     if (!(pobj = trx_db_insert(&uuid, DEFAULT_DB_ID, strlen(DEFAULT_DB_ID) + 1, db)))
     {
         return 1;
     }
-    if (!(pobj->file->ree_basename = strdup("0")))
+    if (!(pobj->ree_basename = strdup("0")))
     {
         return 1;
     }
-    pobj->file->ree_basename_size = strlen(pobj->file->ree_basename) + 1;
+    pobj->ree_basename_size = strlen(pobj->ree_basename) + 1;
 
-    if (trx_file_load(pobj->file))
+    if ((ree_path_size = snprintf(NULL, 0, "%s/%s", db->ree_dirname, DEFAULT_BK_BASENAME) + 1) < 1)
     {
         return 1;
     }
+    if (!(ree_path = malloc(ree_path_size)))
+    {
+        return 1;
+    }
+    if (ree_path_size != ((size_t)snprintf(ree_path, ree_path_size, "%s/%s",
+                                           db->ree_dirname, DEFAULT_BK_BASENAME) + 1))
+    {
+        free(ree_path);
+        return 1;
+    }
+
+    res = ree_fs_api_open(ree_path, ree_path_size, &fd);
+    if (res != TEE_SUCCESS)
+    {
+        free(ree_path);
+        return 1;
+    }
+    free(ree_path);
+    tmp_size = sizeof(size_t);
+    res = ree_fs_api_read(fd, 0, &data_size, &tmp_size);
+    if ((res != TEE_SUCCESS) || (tmp_size != sizeof(size_t)))
+    {
+        ree_fs_api_close(fd);
+        return 1;
+    }
+
+    if (!(data = malloc(data_size)))
+    {
+        ree_fs_api_close(fd);
+        return 1;
+    }
+
+    tmp_size = data_size;
+    res = ree_fs_api_read(fd, sizeof(size_t), data, &tmp_size);
+    if ((res != TEE_SUCCESS) || (tmp_size != data_size))
+    {
+        free(data);
+        ree_fs_api_close(fd);
+        return 1;
+    }
+    ree_fs_api_close(fd);
 
     if (!(ibme = trx_ibme_init()))
     {
+        free(data);
         return 1;
     }
     res = trx_ibme_load(ibme);
     if (res != TEE_SUCCESS)
     {
+        free(data);
         trx_ibme_clear(ibme);
         return 1;
     }
     if (!(bk_enc = Cipher_init(*(ibme->pairing))))
     {
+        free(data);
         trx_ibme_clear(ibme);
         return 1;
     }
-    if (0 == Cipher_set_str(pobj->file->bk_enc, pobj->file->bk_enc_size, bk_enc))
+    if (0 == Cipher_set_str(data, data_size, bk_enc))
     {
         Cipher_clear(bk_enc);
         trx_ibme_clear(ibme);
         return 1;
     }
+    
+    free(data);
 
     tmp_size = buffer_size;
     if (ibme_dec(*(ibme->pairing), ibme->dk, (unsigned char *)S, S_size, bk_enc, (unsigned char *)buffer, &tmp_size) != 0)
@@ -500,8 +550,7 @@ int trx_db_import(trx_db *db, char *S, size_t S_size)
     Cipher_clear(bk_enc);
     trx_ibme_clear(ibme);
 
-    TEE_InitRefAttribute(&attr, TEE_ATTR_SECRET_VALUE, buffer, buffer_size);
-    res = TEE_PopulateTransientObject(db->bk, &attr, 1);
+    res = trx_bk_from_bytes(db->bk, buffer, buffer_size);
     if (res != TEE_SUCCESS)
     {
         return 1;
@@ -565,9 +614,9 @@ int trx_db_list_snprint(char *s, size_t n, db_list_head *h)
     int status;
     TEE_Result res;
     uint32_t buffer_size, i;
-    uint8_t buffer[HMACSHA256_KEY_SIZE];
+    uint8_t buffer[trx_bk_size];
 
-    buffer_size = HMACSHA256_KEY_SIZE;
+    buffer_size = trx_bk_size;
 
     result = 0;
 
@@ -639,7 +688,7 @@ int trx_db_list_snprint(char *s, size_t n, db_list_head *h)
             return status;
         }
         clip_sub(&result, status, &left, n);
-        res = TEE_GetObjectBufferAttribute(e->db->bk, TEE_ATTR_SECRET_VALUE, buffer, &buffer_size);
+        res = trx_bk_to_bytes(e->db->bk, buffer, &buffer_size);
         if (res != TEE_SUCCESS)
         {
             return status;
@@ -669,11 +718,10 @@ int trx_db_list_set_str(char *s, size_t n, db_list_head *h)
     size_t db_list_len, i;
     trx_db *db;
     uint32_t buffer_size, j;
-    uint8_t buffer[HMACSHA256_KEY_SIZE];
+    uint8_t buffer[trx_bk_size];
     TEE_Result res;
-    TEE_Attribute attr = {};
 
-    buffer_size = HMACSHA256_KEY_SIZE;
+    buffer_size = trx_bk_size;
 
     result = 0;
 
@@ -759,8 +807,7 @@ int trx_db_list_set_str(char *s, size_t n, db_list_head *h)
             }
             clip_sub(&result, status, &left, n);
         }
-        TEE_InitRefAttribute(&attr, TEE_ATTR_SECRET_VALUE, buffer, buffer_size);
-        res = TEE_PopulateTransientObject(db->bk, &attr, 1);
+        res = trx_bk_from_bytes(db->bk, buffer, buffer_size);
         if (res != TEE_SUCCESS)
         {
             return status;
@@ -973,11 +1020,6 @@ trx_db *trx_db_list_get(char *mount_point, size_t mount_point_size, db_list_head
         {
             if (memcmp(e->db->mount_point, mount_point, mount_point_size) == 0)
             {
-                //if(trx_db_get(&uuid, DEFAULT_DB_ID, strlen(DEFAULT_DB_ID) + 1, e->db) == NULL) {
-                //    if (trx_db_load(e->db) != 0) {
-                //        return NULL;
-                //    }
-                //}
                 return e->db;
             }
         }

@@ -61,5 +61,5 @@ bool trx_authorization_share(const char *mount_point, const char *R)
 bool trx_authorization_mount(const char *mount_point, const char *S)
 {
     return trx_authorization_authorize("Authorize Secure Storage Volume from \"%s\""
-                                        " to be mounted on \"%s\"? [y\\n] ", mount_point, S);
+                                        " to be mounted on \"%s\"? [y\\n] ", S, mount_point);
 }

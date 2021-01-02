@@ -8,11 +8,11 @@
 #include "trx_file.h"
 #include "trx_path.h"
 #include "trx_manager_defaults.h"
+#include "trx_keys.h"
 
 struct _path_list_head;
 struct _tss_list_head;
 struct _trx_pobj;
-struct _trx_file;
 struct _trx_path;
 
 typedef struct _trx_db
@@ -25,7 +25,7 @@ typedef struct _trx_db
     char *ree_dirname;
     size_t ree_dirname_size;
     struct _trx_pobj *pobj;
-    TEE_ObjectHandle bk;
+    trx_bk *bk;
 } trx_db;
 
 trx_db *trx_db_init(void);
@@ -34,7 +34,7 @@ struct _trx_pobj *trx_db_insert(const TEE_UUID *uuid, const char *id, size_t id_
 struct _trx_pobj *trx_db_get(TEE_UUID *uuid, const char *id, size_t id_size, trx_db *db);
 int trx_db_snprint(char *s, size_t n, trx_db *db);
 int trx_db_set_str(char *s, size_t n, trx_db *db);
-int trx_db_gen_ree_basename(trx_db *db, struct _trx_file *file);
+int trx_db_gen_ree_basename(trx_db *db, struct _trx_pobj *pobj);
 
 int trx_db_save(trx_db *db);
 int trx_db_load(trx_db *db);

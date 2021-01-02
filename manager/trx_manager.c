@@ -15,6 +15,7 @@
 #include "trx_file.h"
 #include "trx_authorization.h"
 #include <ibme/ibme.h>
+#include "trx_keys.h"
 
 TEE_Result setup(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
 {
@@ -118,10 +119,10 @@ TEE_Result setup(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
         trx_db_clear(db);
         return TEE_ERROR_GENERIC;
     }
-    res = TEE_GenerateKey(db->bk, HMACSHA256_KEY_BIT_SIZE, NULL, 0);
+    res = trx_bk_gen(db->bk);
     if (res != TEE_SUCCESS)
     {
-        EMSG("TEE_GenerateKey(%" PRId32 "): %#" PRIx32, HMACSHA256_KEY_BIT_SIZE, res);
+        EMSG("TA_TRX_MANAGER_CMD_SETUP failed calling function \'trx_bk_gen\'");
         trx_db_clear(db);
         return res;
     }
@@ -359,14 +360,13 @@ TEE_Result list(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
         trx_db_list_clear(db_lh);
         return TEE_ERROR_GENERIC;
     }
-
+    
     if (!(path_lh = trx_path_list_init()))
     {
         EMSG("TA_TRX_MANAGER_CMD_LIST failed calling function \'trx_path_list_init\'");
         trx_db_list_clear(db_lh);
         return TEE_ERROR_GENERIC;
     }
-
     if (trx_db_list_to_path_list(path_lh, uuid, db_lh) != 0)
     {
         EMSG("TA_TRX_MANAGER_CMD_LIST failed calling function \'trx_db_list_to_path_list\'");
@@ -374,7 +374,6 @@ TEE_Result list(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
         trx_path_list_clear(path_lh);
         return TEE_ERROR_GENERIC;
     }
-
     if ((tmp_list_size = trx_path_list_snprint(list, *list_size, path_lh) + 1) < 1)
     {
         EMSG("TA_TRX_MANAGER_CMD_LIST failed calling function \'trx_path_list_snprint\'");
@@ -382,7 +381,6 @@ TEE_Result list(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
         trx_path_list_clear(path_lh);
         return TEE_ERROR_GENERIC;
     }
-
     trx_path_list_clear(path_lh);
     trx_db_list_clear(db_lh);
     *list_size = (uint32_t)tmp_list_size;
