@@ -266,16 +266,16 @@ TEE_Result trx_cipher_encrypt(trx_bk *bk, TEE_UUID *uuid, void *src, size_t src_
     trx_dek *dek = NULL;
     uint8_t *data_enc, *dek_enc;
     size_t data_enc_size, dek_enc_size, exp_dst_size;
-    
+
     res = trx_cipher_encrypt_data(NULL, src, src_size, new_version, NULL, &data_enc_size);
-    if(res != TEE_ERROR_SHORT_BUFFER)
+    if (res != TEE_ERROR_SHORT_BUFFER)
     {
         res = TEE_ERROR_GENERIC;
         goto out;
     }
 
     res = trx_cipher_encrypt_dek(NULL, NULL, NULL, &dek_enc_size);
-    if(res != TEE_ERROR_SHORT_BUFFER)
+    if (res != TEE_ERROR_SHORT_BUFFER)
     {
         res = TEE_ERROR_GENERIC;
         goto out;
@@ -297,7 +297,8 @@ TEE_Result trx_cipher_encrypt(trx_bk *bk, TEE_UUID *uuid, void *src, size_t src_
     dek_enc = dst;
     data_enc = dek_enc + dek_enc_size;
 
-    if(!(dek = trx_dek_init())) {
+    if (!(dek = trx_dek_init()))
+    {
         res = TEE_ERROR_GENERIC;
         goto out;
     }
@@ -309,12 +310,11 @@ TEE_Result trx_cipher_encrypt(trx_bk *bk, TEE_UUID *uuid, void *src, size_t src_
     }
 
     res = trx_cipher_encrypt_data(dek, src, src_size, new_version, data_enc, &data_enc_size);
-    if(res != TEE_SUCCESS)
+    if (res != TEE_SUCCESS)
     {
         goto out;
     }
-
-    if(!(tsk = trx_tsk_init()))
+    if (!(tsk = trx_tsk_init()))
     {
         res = TEE_ERROR_GENERIC;
         goto out;
@@ -326,7 +326,7 @@ TEE_Result trx_cipher_encrypt(trx_bk *bk, TEE_UUID *uuid, void *src, size_t src_
     }
 
     res = trx_cipher_encrypt_dek(tsk, dek, dek_enc, &dek_enc_size);
-    if(res != TEE_SUCCESS)
+    if (res != TEE_SUCCESS)
     {
         res = TEE_ERROR_GENERIC;
         goto out;
@@ -348,20 +348,20 @@ TEE_Result trx_cipher_decrypt(trx_bk *bk, TEE_UUID *uuid, void *src, size_t src_
     size_t data_enc_size, dek_enc_size, exp_dst_size;
 
     res = trx_cipher_encrypt_dek(NULL, NULL, NULL, &dek_enc_size);
-    if(res != TEE_ERROR_SHORT_BUFFER)
+    if (res != TEE_ERROR_SHORT_BUFFER)
     {
         res = TEE_ERROR_GENERIC;
         goto out;
     }
 
     res = trx_cipher_encrypt_data(NULL, NULL, 0, 0, NULL, &data_enc_size);
-    if(res != TEE_ERROR_SHORT_BUFFER)
+    if (res != TEE_ERROR_SHORT_BUFFER)
     {
         res = TEE_ERROR_GENERIC;
         goto out;
     }
 
-    if(src_size < (dek_enc_size + data_enc_size))
+    if (src_size < (dek_enc_size + data_enc_size))
     {
         res = TEE_ERROR_GENERIC;
         goto out;

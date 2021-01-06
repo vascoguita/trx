@@ -1,5 +1,6 @@
 srcs-y += ta_entry.c
-srcs-y += trx_db.c
+srcs-y += trx_volume.c
+srcs-y += trx_volume_table.c
 srcs-y += trx_tss.c
 srcs-y += trx_pobj.c
 srcs-y += trx_ibme.c

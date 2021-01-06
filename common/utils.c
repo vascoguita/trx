@@ -6,7 +6,8 @@
 
 #include "utils.h"
 
-void clip_sub(size_t *result, int status, size_t *left, size_t n) {
+void clip_sub(size_t *result, int status, size_t *left, size_t n)
+{
     *result += status;
     *left = *result >= n ? 0 : n - *result;
 }
@@ -18,7 +19,8 @@ char *basename(const char *path)
     const char *endp, *startp;
 
     /* Empty or NULL string gets treated as "." */
-    if (path == NULL || *path == '\0') {
+    if (path == NULL || *path == '\0')
+    {
         bname[0] = '.';
         bname[1] = '\0';
         return (bname);
@@ -30,7 +32,8 @@ char *basename(const char *path)
         endp--;
 
     /* All slashes becomes "/" */
-    if (endp == path && *endp == '/') {
+    if (endp == path && *endp == '/')
+    {
         bname[0] = '/';
         bname[1] = '\0';
         return (bname);
@@ -42,7 +45,8 @@ char *basename(const char *path)
         startp--;
 
     len = endp - startp + 1;
-    if (len >= sizeof(bname)) {
+    if (len >= sizeof(bname))
+    {
         return (NULL);
     }
     memcpy(bname, startp, len);
@@ -57,7 +61,8 @@ char *dirname(const char *path)
     const char *endp;
 
     /* Empty or NULL string gets treated as "." */
-    if (path == NULL || *path == '\0') {
+    if (path == NULL || *path == '\0')
+    {
         dname[0] = '.';
         dname[1] = '\0';
         return (dname);
@@ -73,24 +78,41 @@ char *dirname(const char *path)
         endp--;
 
     /* Either the dir is "/" or there are no slashes */
-    if (endp == path) {
+    if (endp == path)
+    {
         dname[0] = *endp == '/' ? '/' : '.';
         dname[1] = '\0';
         return (dname);
-    } else {
+    }
+    else
+    {
         /* Move forward past the separating slashes */
-        do {
+        do
+        {
             endp--;
         } while (endp > path && *endp == '/');
     }
 
     len = endp - path + 1;
-    if (len >= sizeof(dname)) {
+    if (len >= sizeof(dname))
+    {
         return (NULL);
     }
     memcpy(dname, path, len);
     dname[len] = '\0';
     return (dname);
+}
+
+char *path(const char *dirname, const char *basename)
+{
+    static char pname[PATH_MAX];
+
+    if (!snprintf(pname, PATH_MAX, "%s/%s", dirname, basename))
+    {
+        return NULL;
+    }
+
+    return pname;    
 }
 
 int tee_uuid_snprint(char *s, size_t n, TEE_UUID *uuid)
@@ -101,27 +123,35 @@ int tee_uuid_snprint(char *s, size_t n, TEE_UUID *uuid)
     result = 0;
 
     status = snprintf(s, n, "%x", uuid->timeLow);
-    if (status < 0) {
+    if (status < 0)
+    {
         return status;
     }
     clip_sub(&result, status, &left, n);
     status = snprintf(s + result, left, "-%x", uuid->timeMid);
-    if (status < 0) {
+    if (status < 0)
+    {
         return status;
     }
     clip_sub(&result, status, &left, n);
     status = snprintf(s + result, left, "-%x", uuid->timeHiAndVersion);
-    if (status < 0) {
+    if (status < 0)
+    {
         return status;
     }
     clip_sub(&result, status, &left, n);
-    for(i = 0; i < 8; i++) {
-        if((i == 0) || (i == 2)) {
+    for (i = 0; i < 8; i++)
+    {
+        if ((i == 0) || (i == 2))
+        {
             status = snprintf(s + result, left, "-%x", uuid->clockSeqAndNode[i]);
-        } else {
+        }
+        else
+        {
             status = snprintf(s + result, left, "%x", uuid->clockSeqAndNode[i]);
         }
-        if (status < 0) {
+        if (status < 0)
+        {
             return status;
         }
         clip_sub(&result, status, &left, n);

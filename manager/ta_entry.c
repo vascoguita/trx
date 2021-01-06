@@ -4,14 +4,34 @@
 
 TEE_Result TA_CreateEntryPoint(void)
 {
+    TEE_Result res;
+
     DMSG("has been called");
 
+    if(!(volume_table = trx_volume_table_init()))
+    {
+        EMSG("failed calling function \'trx_volume_table_init\'");
+        return TEE_ERROR_GENERIC;
+    }
+    
+    if(trx_volume_table_exists())
+    {
+        res = trx_volume_table_load(volume_table);
+        if(res != TEE_SUCCESS)
+        {
+            EMSG("failed calling function \'trx_volume_table_load\'");
+            trx_volume_table_clear(volume_table);
+            return TEE_ERROR_GENERIC;
+        }
+    }
     return TEE_SUCCESS;
 }
 
 void TA_DestroyEntryPoint(void)
 {
     DMSG("has been called");
+    
+    trx_volume_table_clear(volume_table);
 }
 
 TEE_Result TA_OpenSessionEntryPoint(uint32_t param_types, TEE_Param params[4], void **sess_ctx)

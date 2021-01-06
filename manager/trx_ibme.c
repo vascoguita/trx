@@ -241,12 +241,10 @@ TEE_Result trx_ibme_save(trx_ibme *ibme)
     }
     TEE_MemMove(id, DEFAULT_IBME_ID, id_size);
 
-    flags = TEE_DATA_FLAG_ACCESS_READ;
+    //FIXME change to: flags = TEE_DATA_FLAG_ACCESS_READ;
 
-#if DEBUG
     flags = TEE_DATA_FLAG_ACCESS_READ | TEE_DATA_FLAG_ACCESS_WRITE |
             TEE_DATA_FLAG_ACCESS_WRITE_META | TEE_DATA_FLAG_OVERWRITE;
-#endif
 
     res = TEE_CreatePersistentObject(TEE_STORAGE_PRIVATE, id, id_size, flags,
                                      TEE_HANDLE_NULL, ibme_str, ibme_str_len + 1, &obj);

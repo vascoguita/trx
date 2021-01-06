@@ -3,38 +3,35 @@
 
 #include <tee_internal_api.h>
 #include <sys/queue.h>
-#include "trx_db.h"
+#include "trx_volume.h"
 #include "trx_pobj.h"
 
-struct _pobj_list_head;
-struct _trx_db;
+struct _trx_volume;
+struct _trx_pobj;
+
+typedef struct _pobj_entry
+{
+    struct _trx_pobj *pobj;
+    SLIST_ENTRY(_pobj_entry)
+    _pobj_entries;
+} pobj_entry;
+typedef SLIST_HEAD(_pobj_table_head, _pobj_entry) pobj_table_head;
 
 typedef struct _trx_tss
 {
+    pobj_table_head pobj_table;
+    long unsigned int pobj_table_len;
     TEE_UUID *uuid;
-    struct _pobj_list_head *pobj_lh;
-    struct _trx_db *db;
+    struct _trx_volume *volume;
 } trx_tss;
 
 trx_tss *trx_tss_init(void);
 void trx_tss_clear(trx_tss *tss);
-int trx_tss_snprint(char *s, size_t n, trx_tss *tss);
-int trx_tss_set_str(char *s, size_t n, trx_tss *tss);
+trx_tss *trx_tss_create(TEE_UUID *uuid);
+TEE_Result trx_tss_add(trx_tss *tss, struct _trx_pobj *pobj);
+struct _trx_pobj *trx_tss_get(trx_tss *tss, const char *id, size_t id_size);
 
-typedef struct _tss_entry
-{
-    trx_tss *tss;
-    SLIST_ENTRY(_tss_entry)
-    _tss_entries;
-} tss_entry;
-typedef SLIST_HEAD(_tss_list_head, _tss_entry) tss_list_head;
-
-tss_list_head *trx_tss_list_init(void);
-void trx_tss_list_clear(tss_list_head *h);
-size_t trx_tss_list_len(tss_list_head *h);
-trx_tss *trx_tss_list_get(const TEE_UUID *uuid, tss_list_head *h);
-int trx_tss_list_add(trx_tss *tss, tss_list_head *h);
-int trx_tss_list_snprint(char *s, size_t n, tss_list_head *h);
-int trx_tss_list_set_str(char *s, size_t n, tss_list_head *h);
+TEE_Result trx_tss_serialize(trx_tss *tss, void *data, size_t *data_size);
+TEE_Result trx_tss_deserialize(trx_tss *tss, void *data, size_t data_size);
 
 #endif //TRX_TSS_H

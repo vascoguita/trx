@@ -1,21 +1,21 @@
 #include "trx_pobj.h"
 #include <stdlib.h>
-#include <stdio.h>
-#include "utils.h"
 #include <string.h>
-#include <utee_defines.h>
 #include <tee_internal_api.h>
-#include <tee_internal_api_extensions.h>
 #include <ree_fs_api.h>
-#include <utee_defines.h>
-#include "trx_db.h"
+#include "trx_volume.h"
 #include "trx_cipher.h"
+#include "utils.h"
 
 trx_pobj *trx_pobj_init(void)
 {
     trx_pobj *pobj;
+
+    DMSG("initializing pobj");
+
     if ((pobj = (struct _trx_pobj *)malloc(sizeof(struct _trx_pobj))) == NULL)
     {
+        EMSG("failed calling function \'malloc\'");
         return NULL;
     }
     pobj->ree_basename = NULL;
@@ -26,11 +26,17 @@ trx_pobj *trx_pobj_init(void)
     pobj->data = NULL;
     pobj->data_size = 0;
     pobj->version = 0;
+    pobj->isloaded = false;
+
+    DMSG("initialized pobj");
+
     return pobj;
 }
 
 void trx_pobj_clear(trx_pobj *pobj)
 {
+    DMSG("clearing pobj");
+
     if (pobj)
     {
         free(pobj->id);
@@ -38,502 +44,307 @@ void trx_pobj_clear(trx_pobj *pobj)
         free(pobj->data);
     }
     free(pobj);
+
+    DMSG("cleared pobj");
 }
 
-int trx_pobj_save(trx_pobj *pobj)
+trx_pobj *trx_pobj_create(char *ree_basename, size_t ree_basename_size,
+                          char *id, size_t id_size, void *data, size_t data_size)
+{
+    trx_pobj *pobj;
+    TEE_Result res;
+
+    DMSG("creating pobj, ree_basename: \"%s\", ree_basename_size: %zu, id: \"%s\", id_size: %zu, data: \"%s\", data_size: %zu",
+         ree_basename, ree_basename_size, id, id_size, (char *)data, data_size);
+
+    if (!(pobj = trx_pobj_init()))
+    {
+        EMSG("failed calling function \'trx_pobj_init\'");
+        return NULL;
+    }
+    res = trx_pobj_set_ree_basename(pobj, ree_basename, ree_basename_size);
+    if (res != TEE_SUCCESS)
+    {
+        EMSG("failed calling function \'trx_pobj_set_ree_basename\'");
+        trx_pobj_clear(pobj);
+        return NULL;
+    }
+    res = trx_pobj_set_id(pobj, id, id_size);
+    if (res != TEE_SUCCESS)
+    {
+        EMSG("failed calling function \'trx_pobj_set_id\'");
+        trx_pobj_clear(pobj);
+        return NULL;
+    }
+    res = trx_pobj_set_data(pobj, data, data_size);
+    if (res != TEE_SUCCESS)
+    {
+        EMSG("failed calling function \'trx_pobj_set_data\'");
+        trx_pobj_clear(pobj);
+        return NULL;
+    }
+    pobj->isloaded = true;
+
+    DMSG("created pobj, ree_basename: \"%s\", ree_basename_size: %zu, id: \"%s\", id_size: %zu, data: \"%s\", data_size: %zu",
+         pobj->ree_basename, pobj->ree_basename_size, pobj->id, pobj->id_size, (char *)(pobj->data), pobj->data_size);
+    return pobj;
+}
+
+TEE_Result trx_pobj_set_data(trx_pobj *pobj, void *data, size_t data_size)
+{
+    DMSG("setting pobj data: \"%s\", data_size: %zu", (char *)data, data_size);
+
+    free(pobj->data);
+    if (!(pobj->data = malloc(data_size)))
+    {
+        EMSG("failed calling function \'malloc\'");
+        return TEE_ERROR_GENERIC;
+    }
+    pobj->data_size = data_size;
+    memcpy(pobj->data, data, data_size);
+
+    DMSG("set pobj data: \"%s\", data_size: %zu", (char *)(pobj->data), pobj->data_size);
+    return TEE_SUCCESS;
+}
+
+TEE_Result trx_pobj_set_data_size(trx_pobj *pobj, size_t data_size)
+{
+    DMSG("setting pobj data_size: %zu", data_size);
+
+    pobj->data_size = data_size;
+
+    DMSG("set pobj data_size: %zu", pobj->data_size);
+    return TEE_SUCCESS;
+}
+
+TEE_Result trx_pobj_set_id(trx_pobj *pobj, char *id, size_t id_size)
+{
+    DMSG("setting pobj id: \"%s\", id_size: %zu", id, id_size);
+
+    free(pobj->id);
+    if (!(pobj->id = strndup(id, id_size)))
+    {
+        EMSG("failed calling function \'strndup\'");
+        return TEE_ERROR_GENERIC;
+    }
+    pobj->id_size = id_size;
+
+    DMSG("set pobj id: \"%s\", id_size: %zu", pobj->id, pobj->id_size);
+    return TEE_SUCCESS;
+}
+
+TEE_Result trx_pobj_set_ree_basename(trx_pobj *pobj, char *ree_basename, size_t ree_basename_size)
+{
+    DMSG("setting pobj ree_basename: \"%s\", ree_basename_size: %zu", ree_basename, ree_basename_size);
+
+    free(pobj->ree_basename);
+    if (!(pobj->ree_basename = strndup(ree_basename, ree_basename_size)))
+    {
+        EMSG("failed calling function \'strndup\'");
+        return TEE_ERROR_GENERIC;
+    }
+    pobj->ree_basename_size = ree_basename_size;
+
+    DMSG("set pobj ree_basename: \"%s\", ree_basename_size: %zu", pobj->ree_basename, pobj->ree_basename_size);
+    return TEE_SUCCESS;
+}
+
+TEE_Result trx_pobj_set_tss(trx_pobj *pobj, struct _trx_tss *tss)
+{
+    DMSG("setting pobj tss");
+
+    if (!tss)
+    {
+        EMSG("failed checking if tss is not NULL");
+        return TEE_ERROR_GENERIC;
+    }
+
+    pobj->tss = tss;
+
+    DMSG("set pobj tss");
+    return TEE_SUCCESS;
+}
+
+TEE_Result trx_pobj_set_version(trx_pobj *pobj, unsigned long int version)
+{
+    DMSG("setting pobj version: %lu", version);
+
+    pobj->version = version;
+
+    DMSG("set pobj version: %lu", pobj->version);
+    return TEE_SUCCESS;
+}
+
+TEE_Result trx_pobj_save(trx_pobj *pobj)
 {
     TEE_Result res;
-    uint8_t *data_enc = NULL;
-    size_t data_enc_size = 0;
     int fd;
-    char *ree_path = NULL;
-    size_t ree_path_size;
+    uint8_t *data_enc, sizeof_size, *data = NULL;
+    size_t data_size, data_enc_size, ree_path_size;
+    char *ree_path;
 
     pobj->version++;
 
-    res = trx_cipher_encrypt(pobj->tss->db->bk, pobj->tss->uuid, pobj->data,
-                             pobj->data_size, pobj->version, data_enc, &data_enc_size);
+    DMSG("saving pobj, version: %lu", pobj->version);
+
+    res = trx_cipher_encrypt(pobj->tss->volume->bk, pobj->tss->uuid, pobj->data,
+                             pobj->data_size, pobj->version, NULL, &data_enc_size);
     if (res != TEE_ERROR_SHORT_BUFFER)
     {
-        return 1;
+        EMSG("failed calling function \'trx_cipher_encrypt\'");
+        res = TEE_ERROR_GENERIC;
+        goto out;
     }
-
-    if (!(data_enc = malloc(data_enc_size + sizeof(size_t))))
+    sizeof_size = sizeof(size_t);
+    data_size = sizeof_size + data_enc_size;
+    if (!(data = malloc(data_size)))
     {
-        return 1;
+        EMSG("failed calling function \'malloc\'");
+        res = TEE_ERROR_GENERIC;
+        goto out;
     }
+    memcpy(data, &data_enc_size, sizeof_size);
+    data_enc = data + sizeof_size;
 
-    memcpy(data_enc, &data_enc_size, sizeof(size_t));
-
-    res = trx_cipher_encrypt(pobj->tss->db->bk, pobj->tss->uuid, pobj->data,
-                             pobj->data_size, pobj->version, data_enc + sizeof(size_t), &data_enc_size);
+    res = trx_cipher_encrypt(pobj->tss->volume->bk, pobj->tss->uuid, pobj->data,
+                             pobj->data_size, pobj->version, data_enc, &data_enc_size);
     if (res != TEE_SUCCESS)
     {
-        free(data_enc);
-        return 1;
+        EMSG("failed calling function \'trx_cipher_encrypt\'");
+        res = TEE_ERROR_GENERIC;
+        goto out;
     }
 
-    if ((ree_path_size = snprintf(NULL, 0, "%s/%s", pobj->tss->db->ree_dirname, pobj->ree_basename) + 1) < 1)
+    if (!(ree_path = path(pobj->tss->volume->ree_dirname, pobj->ree_basename)))
     {
-        free(data_enc);
-        return 1;
+        EMSG("failed calling function \'path\'");
+        res = TEE_ERROR_GENERIC;
+        goto out;
     }
-    if (!(ree_path = malloc(ree_path_size)))
-    {
-        free(data_enc);
-        return 1;
-    }
-    if (ree_path_size != ((size_t)snprintf(ree_path, ree_path_size, "%s/%s", pobj->tss->db->ree_dirname, pobj->ree_basename) + 1))
-    {
-        free(ree_path);
-        free(data_enc);
-        return 1;
-    }
+    ree_path_size = strlen(ree_path) + 1;
 
     res = ree_fs_api_create(ree_path, ree_path_size, &fd);
     if (res != TEE_SUCCESS)
     {
-        free(ree_path);
-        free(data_enc);
-        return 1;
+        EMSG("failed calling function \'ree_fs_api_create\'");
+        res = TEE_ERROR_GENERIC;
+        goto out;
     }
-    free(ree_path);
-    res = ree_fs_api_write(fd, 0, data_enc, data_enc_size + sizeof(size_t));
+    res = ree_fs_api_write(fd, 0, data, data_size);
     if (res != TEE_SUCCESS)
     {
-        free(data_enc);
-        ree_fs_api_close(fd);
-        return 1;
+        EMSG("failed calling function \'ree_fs_api_write\'");
+        res = TEE_ERROR_GENERIC;
+        goto out;
     }
-    free(data_enc);
-    ree_fs_api_close(fd);
 
-    return 0;
+    DMSG("saved pobj, version: %lu", pobj->version);
+
+out:
+    free(data);
+    ree_fs_api_close(fd);
+    return res;
 }
 
-int trx_pobj_load(trx_pobj *pobj)
+TEE_Result trx_pobj_load(trx_pobj *pobj)
 {
-    int fd, ret;
+    int fd;
     TEE_Result res;
-    size_t tmp_size;
-    void *data = NULL;
-    size_t data_size;
-    char *ree_path = NULL;
-    size_t ree_path_size;
+    uint8_t *data = NULL, sizeof_size;
+    size_t data_size, ree_path_size, tmp_size;
+    char *ree_path;
 
-    ret = 0;
-    if ((ree_path_size = snprintf(NULL, 0, "%s/%s", pobj->tss->db->ree_dirname, pobj->ree_basename) + 1) < 1)
+    DMSG("loading pobj");
+
+    if (!(ree_path = path(pobj->tss->volume->ree_dirname, pobj->ree_basename)))
     {
-        ret = 1;
+        EMSG("failed calling function \'path\'");
+        res = TEE_ERROR_GENERIC;
         goto out;
     }
-    if (!(ree_path = malloc(ree_path_size)))
-    {
-        ret = 1;
-        goto out;
-    }
-    if (ree_path_size != ((size_t)snprintf(ree_path, ree_path_size, "%s/%s", pobj->tss->db->ree_dirname,
-                                           pobj->ree_basename) + 1))
-    {
-        ret = 1;
-        goto out;
-    }
+    ree_path_size = strlen(ree_path) + 1;
+
     res = ree_fs_api_open(ree_path, ree_path_size, &fd);
     if (res != TEE_SUCCESS)
     {
-        ret = 1;
+        EMSG("failed calling function \'ree_fs_api_open\'");
+        res = TEE_ERROR_GENERIC;
         goto out;
     }
-    tmp_size = sizeof(size_t);
+    sizeof_size = sizeof(size_t);
+    tmp_size = sizeof_size;
     res = ree_fs_api_read(fd, 0, &data_size, &tmp_size);
-    if ((res != TEE_SUCCESS) || (tmp_size != sizeof(size_t)))
+    if ((res != TEE_SUCCESS) || (tmp_size != sizeof_size))
     {
-        ret = 1;
+        EMSG("failed calling function \'ree_fs_api_read\'");
+        res = TEE_ERROR_GENERIC;
         goto out;
     }
 
     if (!(data = malloc(data_size)))
     {
-        ret = 1;
+        EMSG("failed calling function \'malloc\'");
+        res = TEE_ERROR_GENERIC;
         goto out;
     }
 
     tmp_size = data_size;
-    res = ree_fs_api_read(fd, sizeof(size_t), data, &tmp_size);
-    
+    res = ree_fs_api_read(fd, sizeof_size, data, &tmp_size);
+
     if ((res != TEE_SUCCESS) || (tmp_size != data_size))
     {
-        ret = 1;
+        EMSG("failed calling function \'ree_fs_api_read\'");
+        res = TEE_ERROR_GENERIC;
         goto out;
     }
 
     free(pobj->data);
     pobj->data_size = 0;
-    
-    res = trx_cipher_decrypt(pobj->tss->db->bk, pobj->tss->uuid, data, data_size,
+
+    res = trx_cipher_decrypt(pobj->tss->volume->bk, pobj->tss->uuid, data, data_size,
                              &(pobj->version), pobj->data, &(pobj->data_size));
     if (res != TEE_ERROR_SHORT_BUFFER)
     {
-        ret = 1;
+        EMSG("failed calling function \'trx_cipher_decrypt\'");
+        res = TEE_ERROR_GENERIC;
         goto out;
     }
-
     if (!(pobj->data = malloc(pobj->data_size)))
     {
-        ret = 1;
+        EMSG("failed calling function \'malloc\'");
+        res = TEE_ERROR_GENERIC;
         goto out;
     }
-
-    res = trx_cipher_decrypt(pobj->tss->db->bk, pobj->tss->uuid, data, data_size,
+    res = trx_cipher_decrypt(pobj->tss->volume->bk, pobj->tss->uuid, data, data_size,
                              &(pobj->version), pobj->data, &(pobj->data_size));
     if (res != TEE_SUCCESS)
     {
-        ret = 1;
+        EMSG("failed calling function \'trx_cipher_decrypt\'");
+        res = TEE_ERROR_GENERIC;
         goto out;
     }
+    pobj->isloaded = true;
+
+    DMSG("loaded pobj, version: %lu", pobj->version);
+
 out:
     ree_fs_api_close(fd);
-    free(ree_path);
     free(data);
-
-    return ret;
+    return res;
 }
 
-int trx_pobj_snprint(char *s, size_t n, trx_pobj *pobj)
+bool trx_pobj_is_loaded(trx_pobj *pobj)
 {
-    size_t result, left;
-    int status;
+    DMSG("checking if pobj is loaded");
 
-    result = 0;
-
-    status = snprintf(s, n, "[");
-    if (status < 0)
+    if (pobj->isloaded)
     {
-        return status;
+        DMSG("pobj is loaded");
     }
-    clip_sub(&result, status, &left, n);
-    status = snprintf(s + result, left, "%zu", pobj->id_size);
-    if (status < 0)
+    else
     {
-        return status;
-    }
-    clip_sub(&result, status, &left, n);
-    status = snprintf(s + result, left, ", ");
-    if (status < 0)
-    {
-        return status;
-    }
-    clip_sub(&result, status, &left, n);
-    status = snprintf(s + result, left, "%s", pobj->id);
-    if (status < 0)
-    {
-        return status;
-    }
-    clip_sub(&result, status, &left, n);
-    status = snprintf(s + result, left, ", ");
-    if (status < 0)
-    {
-        return status;
-    }
-    clip_sub(&result, status, &left, n);
-    status = snprintf(s + result, left, "%zu", pobj->ree_basename_size);
-    if (status < 0)
-    {
-        return status;
-    }
-    clip_sub(&result, status, &left, n);
-    status = snprintf(s + result, left, ", ");
-    if (status < 0)
-    {
-        return status;
-    }
-    clip_sub(&result, status, &left, n);
-    status = snprintf(s + result, left, "%s", pobj->ree_basename);
-    if (status < 0)
-    {
-        return status;
-    }
-    clip_sub(&result, status, &left, n);
-    status = snprintf(s + result, left, ", ");
-    if (status < 0)
-    {
-        return status;
-    }
-    clip_sub(&result, status, &left, n);
-    status = snprintf(s + result, left, "%lu", pobj->version);
-    if (status < 0)
-    {
-        return status;
-    }
-    clip_sub(&result, status, &left, n);
-    status = snprintf(s + result, left, ", ");
-    if (status < 0)
-    {
-        return status;
-    }
-    clip_sub(&result, status, &left, n);
-    status = snprintf(s + result, left, "%10zu", pobj->data_size);
-    if (status < 0)
-    {
-        return status;
-    }
-    clip_sub(&result, status, &left, n);
-    status = snprintf(s + result, left, "]");
-    if (status < 0)
-    {
-        return status;
-    }
-    return (int)result + status;
-}
-
-int trx_pobj_set_str(char *s, size_t n, trx_pobj *pobj)
-{
-    size_t result, left;
-    int status;
-
-    result = 0;
-
-    status = strlen("[");
-    if (strncmp(s, "[", status) != 0)
-    {
-        return 0;
-    }
-    clip_sub(&result, status, &left, n);
-    if ((pobj->id_size = strtoul(s + result, NULL, 0)) == 0)
-    {
-        return 0;
-    }
-    status = snprintf(NULL, 0, "%zu", pobj->id_size);
-    clip_sub(&result, status, &left, n);
-    if ((pobj->id = (void *)malloc(pobj->id_size)) == NULL)
-    {
-        return 0;
-    }
-    status = strlen(", ");
-    if (strncmp(s + result, ", ", status) != 0)
-    {
-        return 0;
-    }
-    clip_sub(&result, status, &left, n);
-    if ((pobj->id = strndup(s + result, pobj->id_size - 1)) == NULL)
-    {
-        return 0;
-    }
-    status = strlen(pobj->id);
-    clip_sub(&result, status, &left, n);
-    status = strlen(", ");
-    if (strncmp(s + result, ", ", status) != 0)
-    {
-        return 0;
-    }
-    clip_sub(&result, status, &left, n);
-    if ((pobj->ree_basename_size = strtoul(s + result, NULL, 0)) == 0)
-    {
-        return 0;
-    }
-    status = snprintf(NULL, 0, "%zu", pobj->ree_basename_size);
-    clip_sub(&result, status, &left, n);
-    if ((pobj->ree_basename = (void *)malloc(pobj->ree_basename_size)) == NULL)
-    {
-        return 0;
-    }
-    status = strlen(", ");
-    if (strncmp(s + result, ", ", status) != 0)
-    {
-        return 0;
-    }
-    clip_sub(&result, status, &left, n);
-    if ((pobj->ree_basename = strndup(s + result, pobj->ree_basename_size - 1)) == NULL)
-    {
-        return 0;
-    }
-    status = strlen(pobj->ree_basename);
-    clip_sub(&result, status, &left, n);
-    status = strlen(", ");
-    if (strncmp(s + result, ", ", status) != 0)
-    {
-        return 0;
-    }
-    clip_sub(&result, status, &left, n);
-    pobj->version = strtoul(s + result, NULL, 0);
-    status = snprintf(NULL, 0, "%zu", pobj->version);
-    clip_sub(&result, status, &left, n);
-    status = strlen(", ");
-    if (strncmp(s + result, ", ", status) != 0)
-    {
-        return 0;
-    }
-    clip_sub(&result, status, &left, n);
-    if ((pobj->data_size = strtoul(s + result, NULL, 0)) == 0)
-    {
-        return 0;
-    }
-    status = snprintf(NULL, 0, "%10zu", pobj->data_size);
-    clip_sub(&result, status, &left, n);
-    status = strlen("]");
-    if (strncmp(s + result, "]", status) != 0)
-    {
-        return 0;
-    }
-    return (int)result + status;
-}
-
-pobj_list_head *trx_pobj_list_init(void)
-{
-    pobj_list_head *h;
-
-    if ((h = (pobj_list_head *)malloc(sizeof(pobj_list_head))) == NULL)
-    {
-        return NULL;
-    }
-    SLIST_INIT(h);
-
-    return h;
-}
-
-void trx_pobj_list_clear(pobj_list_head *h)
-{
-    pobj_entry *e;
-    while (!SLIST_EMPTY(h))
-    {
-        e = SLIST_FIRST(h);
-        SLIST_REMOVE_HEAD(h, _pobj_entries);
-        trx_pobj_clear(e->pobj);
-        free(e);
-    }
-    free(h);
-}
-
-size_t trx_pobj_list_len(pobj_list_head *h)
-{
-    pobj_entry *e;
-    size_t i = 0;
-
-    SLIST_FOREACH(e, h, _pobj_entries)
-    {
-        i++;
+        DMSG("pobj is not loaded");
     }
 
-    return i;
-}
-
-trx_pobj *trx_pobj_list_get(const char *id, size_t id_size, pobj_list_head *h)
-{
-    pobj_entry *e;
-
-    SLIST_FOREACH(e, h, _pobj_entries)
-    {
-        if ((e->pobj->id_size == id_size) && (strncmp(e->pobj->id, id, id_size) == 0))
-        {
-            return e->pobj;
-        }
-    }
-    return NULL;
-}
-
-int trx_pobj_list_add(trx_pobj *pobj, pobj_list_head *h)
-{
-    pobj_entry *e = malloc(sizeof(struct _pobj_entry));
-    if (e == NULL)
-    {
-        return 1;
-    }
-    e->pobj = pobj;
-    SLIST_INSERT_HEAD(h, e, _pobj_entries);
-    return 0;
-}
-
-int trx_pobj_list_snprint(char *s, size_t n, pobj_list_head *h)
-{
-    pobj_entry *e;
-    size_t result, left;
-    int status;
-
-    result = 0;
-
-    status = snprintf(s, n, "[");
-    if (status < 0)
-    {
-        return status;
-    }
-    clip_sub(&result, status, &left, n);
-    status = snprintf(s + result, left, "%zu", trx_pobj_list_len(h));
-    if (status < 0)
-    {
-        return status;
-    }
-    clip_sub(&result, status, &left, n);
-    status = snprintf(s + result, left, ", ");
-    if (status < 0)
-    {
-        return status;
-    }
-    clip_sub(&result, status, &left, n);
-    SLIST_FOREACH(e, h, _pobj_entries)
-    {
-        status = trx_pobj_snprint(s + result, left, e->pobj);
-        if (status < 0)
-        {
-            return status;
-        }
-        clip_sub(&result, status, &left, n);
-    }
-    status = snprintf(s + result, left, "]");
-    if (status < 0)
-    {
-        return status;
-    }
-    return (int)result + status;
-}
-
-int trx_pobj_list_set_str(char *s, size_t n, pobj_list_head *h)
-{
-    size_t result, left;
-    int status;
-    size_t pobj_list_len, i;
-    trx_pobj *pobj;
-
-    result = 0;
-
-    status = strlen("[");
-    if (strncmp(s, "[", status) != 0)
-    {
-        return 0;
-    }
-    clip_sub(&result, status, &left, n);
-    if ((pobj_list_len = strtoul(s + result, NULL, 0)) == 0)
-    {
-        return 0;
-    }
-    status = snprintf(NULL, 0, "%zu", pobj_list_len);
-    clip_sub(&result, status, &left, n);
-    status = strlen(", ");
-    if (strncmp(s + result, ", ", status) != 0)
-    {
-        return 0;
-    }
-    clip_sub(&result, status, &left, n);
-    for (i = 0; i < pobj_list_len; i++)
-    {
-        if (!(pobj = trx_pobj_init()))
-        {
-            return 0;
-        }
-        if ((status = trx_pobj_set_str(s + result, left, pobj)) == 0)
-        {
-            return 0;
-        }
-        clip_sub(&result, status, &left, n);
-        if (trx_pobj_list_add(pobj, h) != 0)
-        {
-            return 0;
-        }
-    }
-    status = strlen("]");
-    if (strncmp(s + result, "]", status) != 0)
-    {
-        return 0;
-    }
-
-    return (int)result + status;
+    return pobj->isloaded;
 }

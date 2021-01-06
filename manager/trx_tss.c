@@ -11,268 +11,310 @@ trx_tss *trx_tss_init(void)
 {
     trx_tss *tss;
 
+    DMSG("initializing tss");
+
     if (!(tss = (struct _trx_tss *)malloc(sizeof(struct _trx_tss))))
     {
+        EMSG("failed calling function \'malloc\'");
         return NULL;
     }
     if (!(tss->uuid = (TEE_UUID *)malloc(sizeof(TEE_UUID))))
     {
+        EMSG("failed calling function \'malloc\'");
         trx_tss_clear(tss);
         return NULL;
     }
+    SLIST_INIT(&(tss->pobj_table));
+    tss->pobj_table_len = 0;
 
-    if (!(tss->pobj_lh = trx_pobj_list_init()))
-    {
-        trx_tss_clear(tss);
-        return NULL;
-    }
+    DMSG("initialized tss");
+
     return tss;
 }
 
 void trx_tss_clear(trx_tss *tss)
 {
+    pobj_entry *e;
+
+    DMSG("clearing tss");
+
     if (tss)
     {
+        while (!SLIST_EMPTY(&(tss->pobj_table)))
+        {
+            e = SLIST_FIRST(&(tss->pobj_table));
+            SLIST_REMOVE_HEAD(&(tss->pobj_table), _pobj_entries);
+            trx_pobj_clear(e->pobj);
+            free(e);
+        }
         free(tss->uuid);
-        trx_pobj_list_clear(tss->pobj_lh);
     }
     free(tss);
+
+    DMSG("cleared tss");
 }
 
-int trx_tss_snprint(char *s, size_t n, trx_tss *tss)
+trx_tss *trx_tss_create(TEE_UUID *uuid)
 {
-    size_t result, left;
-    int status;
+    trx_tss *tss;
 
-    result = 0;
+    DMSG("creating tss");
 
-    status = snprintf(s, n, "[");
-    if (status < 0)
+    if (!(tss = trx_tss_init()))
     {
-        return status;
-    }
-    clip_sub(&result, status, &left, n);
-    status = tee_uuid_snprint(s + result, left, tss->uuid);
-    if (status < 0)
-    {
-        return status;
-    }
-    clip_sub(&result, status, &left, n);
-    status = snprintf(s + result, left, ", ");
-    if (status < 0)
-    {
-        return status;
-    }
-    clip_sub(&result, status, &left, n);
-    status = trx_pobj_list_snprint(s + result, left, tss->pobj_lh);
-    if (status < 0)
-    {
-        return status;
-    }
-    clip_sub(&result, status, &left, n);
-    status = snprintf(s + result, left, "]");
-    if (status < 0)
-    {
-        return status;
-    }
-    return (int)result + status;
-}
-
-int trx_tss_set_str(char *s, size_t n, trx_tss *tss)
-{
-    size_t result, left;
-    int status;
-    char uuid_tmp_str[37];
-
-    result = 0;
-
-    status = strlen("[");
-    if (strncmp(s, "[", status) != 0)
-    {
-        return 0;
-    }
-    clip_sub(&result, status, &left, n);
-    status = snprintf(uuid_tmp_str, 37, "%s", s + result);
-    if (status < 0)
-    {
-        return 0;
-    }
-    status = 37 - 1;
-    clip_sub(&result, status, &left, n);
-    if (tee_uuid_from_str(tss->uuid, uuid_tmp_str) != TEE_SUCCESS)
-    {
-        return 0;
-    }
-    status = strlen(", ");
-    if (strncmp(s + result, ", ", status) != 0)
-    {
-        return 0;
-    }
-    clip_sub(&result, status, &left, n);
-    if ((status = trx_pobj_list_set_str(s + result, left, tss->pobj_lh)) == 0)
-    {
-        return 0;
-    }
-    clip_sub(&result, status, &left, n);
-    status = strlen("]");
-    if (strncmp(s + result, "]", status) != 0)
-    {
-        return 0;
-    }
-
-    return (int)result + status;
-}
-
-tss_list_head *trx_tss_list_init(void)
-{
-    tss_list_head *h;
-    if ((h = (tss_list_head *)malloc(sizeof(tss_list_head))) == NULL)
-    {
+        EMSG("failed calling function \'trx_tss_init\'");
         return NULL;
     }
-    SLIST_INIT(h);
-    return h;
+    memcpy(tss->uuid, uuid, sizeof(TEE_UUID));
+
+    DMSG("created tss");
+    return tss;
 }
 
-void trx_tss_list_clear(tss_list_head *h)
+TEE_Result trx_tss_add(trx_tss *tss, trx_pobj *pobj)
 {
-    tss_entry *e;
-    while (!SLIST_EMPTY(h))
+    pobj_entry *e;
+    TEE_Result res;
+
+    DMSG("adding pobj to tss");
+
+    if (!(e = malloc(sizeof(struct _pobj_entry))))
     {
-        e = SLIST_FIRST(h);
-        SLIST_REMOVE_HEAD(h, _tss_entries);
-        trx_tss_clear(e->tss);
-        free(e);
+        EMSG("failed calling function \'malloc\'");
+        return TEE_ERROR_GENERIC;
     }
-    free(h);
-}
+    e->pobj = pobj;
 
-size_t trx_tss_list_len(tss_list_head *h)
-{
-    tss_entry *e;
-    size_t i = 0;
-
-    SLIST_FOREACH(e, h, _tss_entries)
+    res = trx_pobj_set_tss(pobj, tss);
+    if (res != TEE_SUCCESS)
     {
-        i++;
+        EMSG("failed calling function \'trx_pobj_set_tss\'");
+        return TEE_ERROR_GENERIC;
     }
 
-    return i;
+    SLIST_INSERT_HEAD(&(tss->pobj_table), e, _pobj_entries);
+    tss->pobj_table_len++;
+
+    DMSG("added pobj to tss, number of pobjs: %lu", tss->pobj_table_len);
+
+    return TEE_SUCCESS;
 }
 
-int trx_tss_list_add(trx_tss *tss, tss_list_head *h)
+trx_pobj *trx_tss_get(trx_tss *tss, const char *id, size_t id_size)
 {
-    tss_entry *e = malloc(sizeof(struct _tss_entry));
-    if (e == NULL)
-    {
-        return 1;
-    }
-    e->tss = tss;
-    SLIST_INSERT_HEAD(h, e, _tss_entries);
-    return 0;
-}
+    pobj_entry *e;
 
-trx_tss *trx_tss_list_get(const TEE_UUID *uuid, tss_list_head *h)
-{
-    tss_entry *e;
+    DMSG("getting pobj from tss, id: \"%s\", id_size: %zu", id, id_size);
 
-    SLIST_FOREACH(e, h, _tss_entries)
+    SLIST_FOREACH(e, &(tss->pobj_table), _pobj_entries)
     {
-        if (memcmp(e->tss->uuid, uuid, sizeof(TEE_UUID)) == 0)
+        if ((e->pobj->id_size == id_size) && (strncmp(e->pobj->id, id, id_size) == 0))
         {
-            return e->tss;
+            DMSG("got pobj from tss, id: \"%s\", id_size: %zu", id, id_size);
+            return e->pobj;
         }
     }
+
+    DMSG("did not get pobj from tss, id: \"%s\", id_size: %zu", id, id_size);
+
     return NULL;
 }
 
-int trx_tss_list_snprint(char *s, size_t n, tss_list_head *h)
+TEE_Result trx_tss_serialize(trx_tss *tss, void *data, size_t *data_size)
 {
-    tss_entry *e;
-    size_t result, left;
-    int status;
+    size_t exp_dst_size;
+    uint8_t *cpy_ptr;
+    pobj_entry *e;
 
-    result = 0;
+    DMSG("checking required buffer size to serialize tss");
 
-    status = snprintf(s, n, "[");
-    if (status < 0)
+    if (!tss)
     {
-        return status;
+        EMSG("failed checking if tss is not NULL");
+        return TEE_ERROR_GENERIC;
     }
-    clip_sub(&result, status, &left, n);
-    status = snprintf(s + result, left, "%zu", trx_tss_list_len(h));
-    if (status < 0)
+
+    exp_dst_size = sizeof(long unsigned int);
+    SLIST_FOREACH(e, &(tss->pobj_table), _pobj_entries)
     {
-        return status;
+        exp_dst_size += sizeof(size_t);
+        exp_dst_size += e->pobj->id_size;
+        exp_dst_size += sizeof(size_t);
+        exp_dst_size += e->pobj->ree_basename_size;
+        exp_dst_size += sizeof(long unsigned int);
+        exp_dst_size += sizeof(size_t);
     }
-    clip_sub(&result, status, &left, n);
-    status = snprintf(s + result, left, ", ");
-    if (status < 0)
+    exp_dst_size += sizeof(TEE_UUID);
+
+    if (!data)
     {
-        return status;
+        *data_size = exp_dst_size;
+        DMSG("defining required buffer size to serialize tss: %zu", *data_size);
+        return TEE_ERROR_SHORT_BUFFER;
     }
-    clip_sub(&result, status, &left, n);
-    SLIST_FOREACH(e, h, _tss_entries)
+    if (*data_size != exp_dst_size)
     {
-        status = trx_tss_snprint(s + result, left, e->tss);
-        if (status < 0)
-        {
-            return status;
-        }
-        clip_sub(&result, status, &left, n);
+        EMSG("failed checking size of \"data\" buffer, provided_size: %zu, required_size: %zu", *data_size, exp_dst_size);
+        return TEE_ERROR_GENERIC;
     }
-    status = snprintf(s + result, left, "]");
-    if (status < 0)
+
+    cpy_ptr = data;
+    memcpy(cpy_ptr, &(tss->pobj_table_len), sizeof(long unsigned int));
+    cpy_ptr += sizeof(long unsigned int);
+    SLIST_FOREACH(e, &(tss->pobj_table), _pobj_entries)
     {
-        return status;
+        memcpy(cpy_ptr, &(e->pobj->id_size), sizeof(size_t));
+        cpy_ptr += sizeof(size_t);
+        memcpy(cpy_ptr, e->pobj->id, e->pobj->id_size);
+        cpy_ptr += e->pobj->id_size;
+        memcpy(cpy_ptr, &(e->pobj->ree_basename_size), sizeof(size_t));
+        cpy_ptr += sizeof(size_t);
+        memcpy(cpy_ptr, e->pobj->ree_basename, e->pobj->ree_basename_size);
+        cpy_ptr += e->pobj->ree_basename_size;
+        memcpy(cpy_ptr, &(e->pobj->version), sizeof(long unsigned int));
+        cpy_ptr += sizeof(long unsigned int);
+        memcpy(cpy_ptr, &(e->pobj->data_size), sizeof(size_t));
+        cpy_ptr += sizeof(size_t);
     }
-    return (int)result + status;
+    memcpy(cpy_ptr, tss->uuid, sizeof(TEE_UUID));
+    cpy_ptr += sizeof(TEE_UUID);
+
+    DMSG("serialized tss");
+
+    return TEE_SUCCESS;
 }
 
-int trx_tss_list_set_str(char *s, size_t n, tss_list_head *h)
+TEE_Result trx_tss_deserialize(trx_tss *tss, void *data, size_t data_size)
 {
-    size_t result, left;
-    int status;
-    size_t tss_list_len, i;
-    trx_tss *tss;
+    TEE_Result res;
+    uint8_t *cpy_ptr;
+    size_t left, tmp_size;
+    long unsigned int i, tmp_version;
+    trx_pobj *pobj;
 
-    result = 0;
+    DMSG("deserializing tss from buffer with size: %zu", data_size);
 
-    status = strlen("[");
-    if (strncmp(s, "[", status) != 0)
+    if (!data || !tss || !data_size)
     {
-        return 0;
+        EMSG("failed calling checking if volume table is not NULL or \"data\" buffer is not NULL"
+             "or size of \"data\" buffer is greater than 1");
+        return TEE_ERROR_GENERIC;
     }
-    clip_sub(&result, status, &left, n);
-    tss_list_len = strtoul(s + result, NULL, 0);
-    status = snprintf(NULL, 0, "%zu", tss_list_len);
-    clip_sub(&result, status, &left, n);
-    status = strlen(", ");
-    if (strncmp(s + result, ", ", status) != 0)
+
+    cpy_ptr = data;
+    left = data_size;
+    if (left < sizeof(long unsigned int))
     {
-        return 0;
+        EMSG("failed checking size of \"data\" buffer");
+        return TEE_ERROR_GENERIC;
     }
-    clip_sub(&result, status, &left, n);
-    for (i = 0; i < tss_list_len; i++)
+    memcpy(&i, cpy_ptr, sizeof(long unsigned int));
+    cpy_ptr += sizeof(long unsigned int);
+    left -= sizeof(long unsigned int);
+
+    while (tss->pobj_table_len < i)
     {
-        if (!(tss = trx_tss_init()))
+        if (!(pobj = trx_pobj_init()))
         {
-            return 0;
+            EMSG("failed calling function \'trx_pobj_init\'");
+            return TEE_ERROR_GENERIC;
         }
-        if ((status = trx_tss_set_str(s + result, left, tss)) == 0)
+        res = trx_tss_add(tss, pobj);
+        if (res != TEE_SUCCESS)
         {
-            return 0;
+            EMSG("failed calling function \'trx_tss_add\'");
+            trx_pobj_clear(pobj);
+            return TEE_ERROR_GENERIC;
         }
-        clip_sub(&result, status, &left, n);
-        if (trx_tss_list_add(tss, h) != 0)
+        if (left < sizeof(size_t))
         {
-            return 0;
+            EMSG("failed checking size of \"data\" buffer");
+            return TEE_ERROR_GENERIC;
         }
+        memcpy(&tmp_size, cpy_ptr, sizeof(size_t));
+        cpy_ptr += sizeof(size_t);
+        left -= sizeof(size_t);
+
+        if (left < tmp_size)
+        {
+            EMSG("failed checking size of \"data\" buffer");
+            return TEE_ERROR_GENERIC;
+        }
+        res = trx_pobj_set_id(pobj, (char *)cpy_ptr, tmp_size);
+        if (res != TEE_SUCCESS)
+        {
+            EMSG("failed calling function \'trx_pobj_set_id\'");
+            return TEE_ERROR_GENERIC;
+        }
+        cpy_ptr += tmp_size;
+        left -= tmp_size;
+        if (left < sizeof(size_t))
+        {
+            EMSG("failed checking size of \"data\" buffer");
+            return TEE_ERROR_GENERIC;
+        }
+        memcpy(&tmp_size, cpy_ptr, sizeof(size_t));
+        cpy_ptr += sizeof(size_t);
+        left -= sizeof(size_t);
+
+        if (left < tmp_size)
+        {
+            EMSG("failed checking size of \"data\" buffer");
+            return TEE_ERROR_GENERIC;
+        }
+        res = trx_pobj_set_ree_basename(pobj, (char *)cpy_ptr, tmp_size);
+        if (res != TEE_SUCCESS)
+        {
+            EMSG("failed calling function \'trx_pobj_set_ree_basename\'");
+            return TEE_ERROR_GENERIC;
+        }
+        cpy_ptr += tmp_size;
+        left -= tmp_size;
+        if (left < sizeof(long unsigned int))
+        {
+            EMSG("failed checking size of \"data\" buffer");
+            return TEE_ERROR_GENERIC;
+        }
+        memcpy(&tmp_version, cpy_ptr, sizeof(long unsigned int));
+        res = trx_pobj_set_version(pobj, tmp_version);
+        if (res != TEE_SUCCESS)
+        {
+            EMSG("failed calling function \'trx_pobj_set_version\'");
+            return TEE_ERROR_GENERIC;
+        }
+        cpy_ptr += sizeof(long unsigned int);
+        left -= sizeof(long unsigned int);
+        if (left < sizeof(size_t))
+        {
+            EMSG("failed checking size of \"data\" buffer");
+            return TEE_ERROR_GENERIC;
+        }
+        memcpy(&tmp_size, cpy_ptr, sizeof(size_t));
+        res = trx_pobj_set_data_size(pobj, tmp_size);
+        if (res != TEE_SUCCESS)
+        {
+            EMSG("failed calling function \'trx_pobj_set_data_size\'");
+            return TEE_ERROR_GENERIC;
+        }
+        cpy_ptr += sizeof(size_t);
+        left -= sizeof(size_t);
     }
-    status = strlen("]");
-    if (strncmp(s + result, "]", status) != 0)
+    if (left < sizeof(TEE_UUID))
     {
-        return 0;
+        EMSG("failed checking size of \"data\" buffer");
+        return TEE_ERROR_GENERIC;
     }
-    return (int)result + status;
+    memcpy(tss->uuid, cpy_ptr, sizeof(TEE_UUID));
+    cpy_ptr += sizeof(TEE_UUID);
+    left -= sizeof(TEE_UUID);
+
+    if (left != 0)
+    {
+        EMSG("failed checking size of \"data\" buffer");
+        return TEE_ERROR_GENERIC;
+    }
+
+    DMSG("deserialized tss");
+
+    return TEE_SUCCESS;
 }

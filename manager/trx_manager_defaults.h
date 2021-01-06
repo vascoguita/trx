@@ -3,12 +3,7 @@
 
 #include <stdio.h>
 
-#define DEFAULT_DB_ID "db"
-#define DEFAULT_DB_ID_SIZE 3
-#define DEFAULT_DB_LIST_ID "db_list"
 #define DEFAULT_IBME_ID "ibme"
-#define DEFAULT_REE_DIRNAME "trx"
-#define DEFAULT_REE_DIRNAME_SIZE 4
 #define DEFAULT_BK_BASENAME "bk.trx"
 #define DEFAULT_BK_BASENAME_SIZE 7
 

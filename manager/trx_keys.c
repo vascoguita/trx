@@ -23,7 +23,7 @@ TEE_Result trx_bk_gen(trx_bk *bk)
 
 void trx_bk_clear(trx_bk *bk)
 {
-    if(bk)
+    if (bk)
     {
         TEE_FreeTransientObject(*bk);
         free(bk);
@@ -35,7 +35,7 @@ TEE_Result trx_bk_from_bytes(trx_bk *bk, uint8_t *buffer, uint32_t buffer_size)
     TEE_Attribute attr = {};
     TEE_Result res;
 
-    if(!buffer || (buffer_size != trx_bk_size))
+    if (!buffer || (buffer_size != trx_bk_size))
     {
         res = TEE_ERROR_GENERIC;
         goto out;
@@ -71,7 +71,7 @@ TEE_Result trx_dek_gen(trx_dek *dek)
 
 void trx_dek_clear(trx_dek *dek)
 {
-    if(dek)
+    if (dek)
     {
         TEE_FreeTransientObject(*dek);
         free(dek);
@@ -83,7 +83,7 @@ TEE_Result trx_dek_from_bytes(trx_dek *dek, uint8_t *buffer, uint32_t buffer_siz
     TEE_Attribute attr = {};
     TEE_Result res;
 
-    if(!buffer || (buffer_size != trx_dek_size))
+    if (!buffer || (buffer_size != trx_dek_size))
     {
         res = TEE_ERROR_GENERIC;
         goto out;
@@ -153,7 +153,7 @@ out:
 
 void trx_tsk_clear(trx_tsk *tsk)
 {
-    if(tsk)
+    if (tsk)
     {
         TEE_FreeTransientObject(*tsk);
         free(tsk);
