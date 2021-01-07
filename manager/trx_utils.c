@@ -4,7 +4,7 @@
 #include <tee_internal_api.h>
 #include <stdio.h>
 
-#include "utils.h"
+#include "trx_utils.h"
 
 void clip_sub(size_t *result, int status, size_t *left, size_t n)
 {

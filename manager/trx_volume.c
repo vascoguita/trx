@@ -9,7 +9,7 @@
 #include "trx_volume.h"
 #include "trx_tss.h"
 #include "trx_ibme.h"
-#include "utils.h"
+#include "trx_utils.h"
 #include "trx_keys.h"
 #include "trx_cipher.h"
 

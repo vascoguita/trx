@@ -5,7 +5,7 @@
 #include <ree_fs_api.h>
 #include "trx_volume.h"
 #include "trx_cipher.h"
-#include "utils.h"
+#include "trx_utils.h"
 
 trx_pobj *trx_pobj_init(void)
 {

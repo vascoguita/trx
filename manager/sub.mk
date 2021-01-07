@@ -8,6 +8,4 @@ srcs-y += trx_cipher.c
 srcs-y += trx_keys.c
 srcs-y += trx_ibme.c
 srcs-y += trx_authorization.c
-subdirs-y += ../common/
 global-incdirs-y += include/
-global-incdirs-y += ../common/

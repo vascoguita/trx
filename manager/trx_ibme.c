@@ -5,7 +5,7 @@
 #include <ibme/ibme.h>
 
 #include "trx_ibme.h"
-#include "utils.h"
+#include "trx_utils.h"
 
 trx_ibme *trx_ibme_init(void)
 {

@@ -4,7 +4,7 @@
 #include <sys/queue.h>
 #include "trx_volume.h"
 #include "trx_volume_table.h"
-#include "utils.h"
+#include "trx_utils.h"
 
 trx_volume_table *trx_volume_table_init(void)
 {

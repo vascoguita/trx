@@ -2,7 +2,7 @@
 #include "trx_pobj.h"
 #include <stdlib.h>
 #include <stdio.h>
-#include "utils.h"
+#include "trx_utils.h"
 #include <string.h>
 #include <tee_internal_api.h>
 #include <tee_internal_api_extensions.h>
