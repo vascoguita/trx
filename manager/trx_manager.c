@@ -9,7 +9,6 @@
 #include "trx_volume.h"
 #include "trx_tss.h"
 #include "trx_pobj.h"
-//#include "trx_path.h"
 #include "utils.h"
 #include "trx_ibme.h"
 #include "trx_authorization.h"
@@ -329,14 +328,12 @@ TEE_Result read(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
 
 TEE_Result list(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
 {
-    /*uint32_t exp_param_types, *list_size;
+    uint32_t exp_param_types, *data_size;
     TEE_Identity identity;
     TEE_Result res;
-    char *list;
     TEE_UUID *uuid;
-    volume_list_head *volume_lh;
-    path_list_head *path_lh;
-    int tmp_list_size;*/
+    uint8_t *data;
+    size_t tmp_data_size;
 
     (void)&sess_ctx;
     (void)&param_types;
@@ -344,15 +341,15 @@ TEE_Result list(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
 
     DMSG("has been called");
 
-    /*exp_param_types = TEE_PARAM_TYPES(TEE_PARAM_TYPE_MEMREF_OUTPUT, TEE_PARAM_TYPE_NONE,
+    exp_param_types = TEE_PARAM_TYPES(TEE_PARAM_TYPE_MEMREF_OUTPUT, TEE_PARAM_TYPE_NONE,
                                       TEE_PARAM_TYPE_NONE, TEE_PARAM_TYPE_NONE);
     if (param_types != exp_param_types)
     {
         return TEE_ERROR_BAD_PARAMETERS;
     }
 
-    list = params[0].memref.buffer;
-    list_size = &(params[0].memref.size);
+    data = params[0].memref.buffer;
+    data_size = &(params[0].memref.size);
 
     res = TEE_GetPropertyAsIdentity(TEE_PROPSET_CURRENT_CLIENT, "gpd.client.identity", &identity);
     if (res != TEE_SUCCESS)
@@ -362,46 +359,15 @@ TEE_Result list(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
     }
     uuid = &identity.uuid;
 
-    if (!(volume_lh = trx_volume_list_init()))
+    tmp_data_size = (size_t)*data_size;
+    res = trx_volume_table_serialize_paths(volume_table, uuid, data, &tmp_data_size);
+    if(res == TEE_ERROR_SHORT_BUFFER)
     {
-        EMSG("TA_TRX_MANAGER_CMD_LIST failed calling function \'trx_volume_list_init\'");
-        return TEE_ERROR_GENERIC;
+        
     }
+    *data_size = (uint32_t)tmp_data_size;
 
-    if (trx_volume_list_load(volume_lh) != TEE_SUCCESS)
-    {
-        EMSG("TA_TRX_MANAGER_CMD_LIST failed calling function \'trx_volume_list_load\'");
-        trx_volume_list_clear(volume_lh);
-        return TEE_ERROR_GENERIC;
-    }
-    
-    if (!(path_lh = trx_path_list_init()))
-    {
-        EMSG("TA_TRX_MANAGER_CMD_LIST failed calling function \'trx_path_list_init\'");
-        trx_volume_list_clear(volume_lh);
-        return TEE_ERROR_GENERIC;
-    }
-    if (trx_volume_list_to_path_list(path_lh, uuid, volume_lh) != 0)
-    {
-        EMSG("TA_TRX_MANAGER_CMD_LIST failed calling function \'trx_volume_list_to_path_list\'");
-        trx_volume_list_clear(volume_lh);
-        trx_path_list_clear(path_lh);
-        return TEE_ERROR_GENERIC;
-    }
-    if ((tmp_list_size = trx_path_list_snprint(list, *list_size, path_lh) + 1) < 1)
-    {
-        EMSG("TA_TRX_MANAGER_CMD_LIST failed calling function \'trx_path_list_snprint\'");
-        trx_volume_list_clear(volume_lh);
-        trx_path_list_clear(path_lh);
-        return TEE_ERROR_GENERIC;
-    }
-    trx_path_list_clear(path_lh);
-    trx_volume_list_clear(volume_lh);
-    *list_size = (uint32_t)tmp_list_size;
-    return res;*/
-
-    //FIXME
-    return TEE_ERROR_GENERIC;
+    return res;
 }
 
 TEE_Result mount(void *sess_ctx, uint32_t param_types, TEE_Param params[4])

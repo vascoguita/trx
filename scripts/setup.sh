@@ -1,7 +1,7 @@
 #!/bin/sh
 
-xtest --install-ta $(dirname $0)/../manager/
-xtest --install-ta $(dirname $0)/../demo/ta/
+cp $(dirname $0)/../manager/*.ta /lib/optee_armtz/.
+cp $(dirname $0)/../demo/ta/*.ta /lib/optee_armtz/.
 
 $(dirname $0)/../setup/trx_setup \
     $(dirname $0)/../trusted_authority/param.ibme \
