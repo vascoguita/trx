@@ -197,7 +197,7 @@ TEE_Result trx_tss_deserialize(trx_tss *tss, void *data, size_t data_size)
     if (!data || !tss || !data_size)
     {
         EMSG("failed calling checking if volume table is not NULL or \"data\" buffer is not NULL"
-             "or size of \"data\" buffer is greater than 1");
+             "or size of \"data\" buffer is greater than 0");
         return TEE_ERROR_GENERIC;
     }
 

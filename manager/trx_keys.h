@@ -8,6 +8,7 @@ typedef TEE_ObjectHandle trx_bk, trx_dek, trx_tsk;
 static const uint32_t trx_bk_type = TEE_TYPE_HMAC_SHA256;
 static const uint32_t trx_bk_size = 32;
 static const uint32_t trx_bk_bit_size = trx_bk_size * 8;
+static const char trx_bk_ree_basename[] = "trx_bk.trx";
 
 static const uint32_t trx_dek_type = TEE_TYPE_AES;
 static const uint32_t trx_dek_size = 32;

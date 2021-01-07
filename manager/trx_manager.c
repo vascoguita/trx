@@ -3,19 +3,16 @@
 #include <stdlib.h>
 #include <ree_fs_api.h>
 
-#include "trx_manager_ta.h"
 #include "trx_manager_private.h"
-#include "trx_manager_defaults.h"
-#include "trx_pobj.h"
-#include "trx_tss.h"
-#include "trx_path.h"
-#include "utils.h"
-#include "trx_volume.h"
+#include "trx_manager_ta.h"
 #include "trx_volume_table.h"
+#include "trx_volume.h"
+#include "trx_tss.h"
+#include "trx_pobj.h"
+//#include "trx_path.h"
+#include "utils.h"
 #include "trx_ibme.h"
 #include "trx_authorization.h"
-#include <ibme/ibme.h>
-#include "trx_keys.h"
 
 TEE_Result setup(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
 {
@@ -27,8 +24,6 @@ TEE_Result setup(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
     (void)&sess_ctx;
 
     DMSG("has been called");
-
-    //FIXME, prevent from being called more than once
 
     exp_param_types = TEE_PARAM_TYPES(TEE_PARAM_TYPE_MEMREF_INPUT, TEE_PARAM_TYPE_MEMREF_INPUT,
                                       TEE_PARAM_TYPE_MEMREF_INPUT, TEE_PARAM_TYPE_MEMREF_INPUT);
@@ -47,58 +42,14 @@ TEE_Result setup(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
     dk_str = params[3].memref.buffer;
     dk_str_size = (size_t)params[3].memref.size;
 
-    if (!(ibme = trx_ibme_init()))
+    DMSG("setting up trx ibme keys, param_str: \"%s\" with param_str_size: %zu, mpk_str: \"%s\" with mpk_str_size: %zu, "
+         "ek_str: \"%s\" with ek_str_size: %zu, dk_str: \"%s\" with dk_str_size: %zu, ",
+         param_str, param_str_size, mpk_str, mpk_str_size, ek_str, ek_str_size, dk_str, dk_str_size);
+
+    if(!(ibme = trx_ibme_create(param_str, param_str_size, mpk_str, mpk_str_size,
+                          ek_str, ek_str_size, dk_str, dk_str_size)))
     {
-        EMSG("failed calling function \'trx_ibme_init\'");
-        return TEE_ERROR_GENERIC;
-    }
-    if (!(ibme->param_str = strndup(param_str, param_str_size)))
-    {
-        EMSG("failed calling function \'strndup\'");
-        trx_ibme_clear(ibme);
-        return TEE_ERROR_GENERIC;
-    }
-    ibme->param_str_size = param_str_size;
-    if (1 == pairing_init_set_str(*(ibme->pairing), ibme->param_str))
-    {
-        EMSG("failed calling function \'pairing_init_set_str\'");
-        trx_ibme_clear(ibme);
-        return TEE_ERROR_GENERIC;
-    }
-    if (!(ibme->mpk = MPK_init(*(ibme->pairing))))
-    {
-        EMSG("failed calling function \'MPK_init\'");
-        trx_ibme_clear(ibme);
-        return TEE_ERROR_GENERIC;
-    }
-    if (!(ibme->ek = EK_init(*(ibme->pairing))))
-    {
-        EMSG("failed calling function \'EK_init\'");
-        trx_ibme_clear(ibme);
-        return TEE_ERROR_GENERIC;
-    }
-    if (!(ibme->dk = DK_init(*(ibme->pairing))))
-    {
-        EMSG("failed calling function \'DK_init\'");
-        trx_ibme_clear(ibme);
-        return TEE_ERROR_GENERIC;
-    }
-    if (0 == MPK_set_str(mpk_str, mpk_str_size, ibme->mpk))
-    {
-        EMSG("failed calling function \'MPK_set_str\'");
-        trx_ibme_clear(ibme);
-        return TEE_ERROR_GENERIC;
-    }
-    if (0 == EK_set_str(ek_str, ek_str_size, ibme->ek))
-    {
-        EMSG("failed calling function \'EK_set_str\'");
-        trx_ibme_clear(ibme);
-        return TEE_ERROR_GENERIC;
-    }
-    if (0 == DK_set_str(dk_str, dk_str_size, ibme->dk))
-    {
-        EMSG("failed calling function \'DK_set_str\'");
-        trx_ibme_clear(ibme);
+        EMSG("failed calling function \'trx_ibme_create\'");
         return TEE_ERROR_GENERIC;
     }
     res = trx_ibme_save(ibme);
@@ -109,6 +60,8 @@ TEE_Result setup(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
         return TEE_ERROR_GENERIC;
     }
     trx_ibme_clear(ibme);
+
+    DMSG("set up trx ibme keys");
     return res;
 }
 
@@ -136,6 +89,7 @@ TEE_Result write(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
         EMSG("failed checking parameter types");
         return TEE_ERROR_BAD_PARAMETERS;
     }
+
     path = params[0].memref.buffer;
     path_size = params[0].memref.size;
     data = params[1].memref.buffer;
@@ -296,7 +250,7 @@ TEE_Result read(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
     data = params[1].memref.buffer;
     data_size = &(params[1].memref.size);
 
-    (void)&path_size;
+    DMSG("checking \"data\" buffer size from path: \"%s\" with path_size: %zu", (char *)path, path_size);
 
     if (!(mount_point = dirname(path)))
     {
@@ -341,24 +295,36 @@ TEE_Result read(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
         EMSG("failed calling function \'trx_tss_get\'");
         return TEE_ERROR_GENERIC;
     }
-    if ((*data_size > (uint32_t)pobj->data_size) || (*data_size == 0))
+
+    if (!data)
     {
         *data_size = (uint32_t)pobj->data_size;
+        DMSG("defining required buffer size to read pobj: %zu", (size_t)*data_size);
+        return TEE_ERROR_SHORT_BUFFER;
     }
-    if (data != NULL)
+    if (*data_size != (uint32_t)pobj->data_size)
     {
-        if (!trx_pobj_is_loaded(pobj))
-        {
-            res = trx_pobj_load(pobj);
-            if (res != TEE_SUCCESS)
-            {
-                EMSG("failed calling function \'trx_pobj_load\'");
-                return TEE_ERROR_GENERIC;
-            }
-        }
-        memcpy(data, pobj->data, (size_t)*data_size);
+        EMSG("failed checking size of \"data\" buffer, provided_size: %zu, required_size: %zu",
+             (size_t)*data_size, (size_t)pobj->data_size);
+        return TEE_ERROR_GENERIC;
     }
-    return res;
+
+    DMSG("reading pobj");
+    if (!trx_pobj_is_loaded(pobj))
+    {
+        res = trx_pobj_load(pobj);
+        if (res != TEE_SUCCESS)
+        {
+            EMSG("failed calling function \'trx_pobj_load\'");
+            return TEE_ERROR_GENERIC;
+        }
+    }
+    memcpy(data, pobj->data, (size_t)*data_size);
+
+    DMSG("read pobj data: \"%s\" with data_size: %zu from path: \"%s\" with path_size: %zu",
+         (char *)data, (size_t)*data_size, (char *)path, path_size);
+
+    return TEE_SUCCESS;
 }
 
 TEE_Result list(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
@@ -532,22 +498,21 @@ TEE_Result mount(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
 
 TEE_Result share(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
 {
-    /*uint32_t exp_param_types;
+    uint32_t exp_param_types;
     char *R, *mount_point;
     size_t R_size, mount_point_size;
-    volume_list_head *volume_lh;
-    trx_volume *volume;*/
+    trx_volume *volume;
+    TEE_Result res;
 
     (void)&sess_ctx;
-    (void)&param_types;
-    (void)&params;
 
     DMSG("has been called");
-    /*
+
     exp_param_types = TEE_PARAM_TYPES(TEE_PARAM_TYPE_MEMREF_INPUT, TEE_PARAM_TYPE_MEMREF_INPUT,
                                       TEE_PARAM_TYPE_NONE, TEE_PARAM_TYPE_NONE);
     if (param_types != exp_param_types)
     {
+        EMSG("failed checking parameter types");
         return TEE_ERROR_BAD_PARAMETERS;
     }
 
@@ -556,40 +521,30 @@ TEE_Result share(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
     mount_point = params[1].memref.buffer;
     mount_point_size = params[1].memref.size;
 
-    if (!(volume_lh = trx_volume_list_init()))
+    DMSG("sharing volume mounted on mount_point: \"%s\" with mount_point size size: %zu with receiver: \"%s\" "
+         "with receiver size %zu", mount_point, mount_point_size, R, R_size);
+
+    if (!(volume = trx_volume_table_get(volume_table, mount_point, mount_point_size)))
     {
-        EMSG("TA_TRX_MANAGER_CMD_SHARE failed calling function \'trx_volume_list_init\'");
-        return TEE_ERROR_GENERIC;
-    }
-    if (trx_volume_list_load(volume_lh) != TEE_SUCCESS)
-    {
-        EMSG("TA_TRX_MANAGER_CMD_SHARE failed calling function \'trx_volume_list_load\'");
-        trx_volume_list_clear(volume_lh);
-        return TEE_ERROR_GENERIC;
-    }
-    if (!(volume = trx_volume_list_get(mount_point, mount_point_size, volume_lh)))
-    {
-        EMSG("TA_TRX_MANAGER_CMD_SHARE failed calling function \'trx_volume_list_get\'");
-        trx_volume_list_clear(volume_lh);
+        EMSG("failed calling function \'trx_volume_table_get\'");
         return TEE_ERROR_GENERIC;
     }
 
-    if(!trx_authorization_share(mount_point, R)) {
-        EMSG("TA_TRX_MANAGER_CMD_SHARE failed calling function \'trx_authorization_share\'");
-        trx_volume_list_clear(volume_lh);
-        return TEE_ERROR_GENERIC;
-    }
-
-    if(trx_volume_share(volume, R, R_size) != 0)
+    if (!trx_authorization_share(mount_point, R))
     {
-        EMSG("TA_TRX_MANAGER_CMD_SHARE failed calling function \'trx_volume_share\'");
-        trx_volume_list_clear(volume_lh);
+        EMSG("failed calling function \'trx_authorization_share\'");
         return TEE_ERROR_GENERIC;
     }
 
-    trx_volume_list_clear(volume_lh);
-    return TEE_SUCCESS;*/
+    res = trx_volume_share(volume, R, R_size);
+    if (res != TEE_SUCCESS)
+    {
+        EMSG("failed calling function \'trx_volume_share\'");
+        return TEE_ERROR_GENERIC;
+    }
 
-    //FIXME
-    return TEE_ERROR_GENERIC;
+    DMSG("shared volume mounted on mount_point: \"%s\" with mount_point size size: %zu with receiver: \"%s\" "
+         "with receiver size %zu", volume->mount_point, volume->mount_point_size, R, R_size);
+
+    return res;
 }

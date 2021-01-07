@@ -80,7 +80,7 @@ TEE_Result TA_OpenSessionEntryPoint(uint32_t param_types, TEE_Param params[4], v
             data = NULL;
             data_size = 0;
             res = trx_read(path, path_size, data, &data_size);
-            if (res != TEE_SUCCESS) {
+            if (res != TEE_ERROR_SHORT_BUFFER) {
                 free(path);
                 DMSG("trx_read failed with code 0x%x", res);
                 return TEE_ERROR_GENERIC;

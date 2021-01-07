@@ -364,7 +364,7 @@ TEE_Result trx_volume_table_deserialize(trx_volume_table *volume_table, void *da
     if (!data || !volume_table || !data_size)
     {
         EMSG("failed calling checking if volume table is not NULL or \"data\" buffer is not NULL"
-             "or size of \"data\" buffer is greater than 1");
+             "or size of \"data\" buffer is greater than 0");
         return TEE_ERROR_GENERIC;
     }
 

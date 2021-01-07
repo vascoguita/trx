@@ -75,7 +75,7 @@ TEE_Result trx_read(const char *path, size_t path_size,
     params[1].memref.size = *data_size;
 
     res = invoke_trx_manager_cmd(TA_TRX_MANAGER_CMD_READ, param_types, params);
-    if (res != TEE_SUCCESS) {
+    if ((res != TEE_SUCCESS) || (res != TEE_ERROR_SHORT_BUFFER)) {
         EMSG("invoke_trx_manager_cmd failed to invoke command TA_TRX_MANAGER_CMD_READ with code 0x%x", res);
     }
     *data_size = params[1].memref.size;

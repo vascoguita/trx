@@ -17,7 +17,7 @@ TEE_Result invoke_trx_manager_cmd(uint32_t cmd, uint32_t param_types, TEE_Param 
         return res;
     }
     res = TEE_InvokeTACommand(sess, TEE_TIMEOUT_INFINITE, cmd, param_types, params, &origin);
-    if (res != TEE_SUCCESS) {
+    if ((res != TEE_SUCCESS) || (res != TEE_ERROR_SHORT_BUFFER)) {
         EMSG("TEE_InvokeTACommand failed with code 0x%x origin 0x%x", res, origin);
     }
     TEE_CloseTASession(sess);

@@ -44,7 +44,7 @@ TEE_Result trx_volume_load(trx_volume *volume);
 
 bool trx_volume_is_loaded(trx_volume *volume);
 
-//int trx_volume_share(trx_volume *volume, char *R, size_t R_size);
+TEE_Result trx_volume_share(trx_volume *volume, char *R, size_t R_size);
 //int trx_volume_import(trx_volume *volume, char *S, size_t S_size);
 
 static const char trx_volume_ree_dirname_fmt[] = "volume_%lu.trx";
