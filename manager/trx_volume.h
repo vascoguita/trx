@@ -26,7 +26,7 @@ typedef struct _trx_volume
     char *ree_dirname;
     size_t ree_dirname_size;
     unsigned long int version;
-    trx_bk *bk;
+    trx_vk *vk;
     bool isloaded;
 } trx_volume;
 

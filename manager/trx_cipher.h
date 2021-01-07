@@ -9,9 +9,9 @@ TEE_Result trx_cipher_decrypt_data(trx_dek *dek, void *src, size_t src_size, uns
                                    void *dst, size_t *dst_size);
 TEE_Result trx_cipher_encrypt_dek(trx_tsk *tsk, trx_dek *dek, void *dst, size_t *dst_size);
 TEE_Result trx_cipher_decrypt_dek(trx_tsk *tsk, void *src, size_t src_size, trx_dek *dek);
-TEE_Result trx_cipher_encrypt(trx_bk *bk, TEE_UUID *uuid, void *src, size_t src_size,
+TEE_Result trx_cipher_encrypt(trx_vk *vk, TEE_UUID *uuid, void *src, size_t src_size,
                               unsigned long int new_version, void *dst, size_t *dst_size);
-TEE_Result trx_cipher_decrypt(trx_bk *bk, TEE_UUID *uuid, void *src, size_t src_size,
+TEE_Result trx_cipher_decrypt(trx_vk *vk, TEE_UUID *uuid, void *src, size_t src_size,
                               unsigned long int *last_version, void *dst, size_t *dst_size);
 
 static const uint32_t version_size = sizeof(unsigned long int);

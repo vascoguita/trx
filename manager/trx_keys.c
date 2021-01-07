@@ -4,52 +4,52 @@
 #include <tee_internal_api.h>
 #include <tee_internal_api_extensions.h>
 
-trx_bk *trx_bk_init(void)
+trx_vk *trx_vk_init(void)
 {
-    trx_bk *bk;
-    bk = malloc(sizeof(trx_bk));
-    if (TEE_AllocateTransientObject(trx_bk_type, trx_bk_bit_size, bk) != TEE_SUCCESS)
+    trx_vk *vk;
+    vk = malloc(sizeof(trx_vk));
+    if (TEE_AllocateTransientObject(trx_vk_type, trx_vk_bit_size, vk) != TEE_SUCCESS)
     {
-        trx_bk_clear(bk);
+        trx_vk_clear(vk);
         return NULL;
     }
-    return bk;
+    return vk;
 }
 
-TEE_Result trx_bk_gen(trx_bk *bk)
+TEE_Result trx_vk_gen(trx_vk *vk)
 {
-    return TEE_GenerateKey(*bk, trx_bk_bit_size, NULL, 0);
+    return TEE_GenerateKey(*vk, trx_vk_bit_size, NULL, 0);
 }
 
-void trx_bk_clear(trx_bk *bk)
+void trx_vk_clear(trx_vk *vk)
 {
-    if (bk)
+    if (vk)
     {
-        TEE_FreeTransientObject(*bk);
-        free(bk);
+        TEE_FreeTransientObject(*vk);
+        free(vk);
     }
 }
 
-TEE_Result trx_bk_from_bytes(trx_bk *bk, uint8_t *buffer, uint32_t buffer_size)
+TEE_Result trx_vk_from_bytes(trx_vk *vk, uint8_t *buffer, uint32_t buffer_size)
 {
     TEE_Attribute attr = {};
     TEE_Result res;
 
-    if (!buffer || (buffer_size != trx_bk_size))
+    if (!buffer || (buffer_size != trx_vk_size))
     {
         res = TEE_ERROR_GENERIC;
         goto out;
     }
     TEE_InitRefAttribute(&attr, TEE_ATTR_SECRET_VALUE, buffer, buffer_size);
-    res = TEE_PopulateTransientObject(*bk, &attr, 1);
+    res = TEE_PopulateTransientObject(*vk, &attr, 1);
 
 out:
     return res;
 }
 
-TEE_Result trx_bk_to_bytes(trx_bk *bk, uint8_t *buffer, uint32_t *buffer_size)
+TEE_Result trx_vk_to_bytes(trx_vk *vk, uint8_t *buffer, uint32_t *buffer_size)
 {
-    return TEE_GetObjectBufferAttribute(*bk, TEE_ATTR_SECRET_VALUE, buffer, buffer_size);
+    return TEE_GetObjectBufferAttribute(*vk, TEE_ATTR_SECRET_VALUE, buffer, buffer_size);
 }
 
 trx_dek *trx_dek_init(void)
@@ -112,7 +112,7 @@ trx_tsk *trx_tsk_init(void)
     return tsk;
 }
 
-TEE_Result trx_tsk_derive(trx_tsk *tsk, trx_bk *bk, TEE_UUID *uuid)
+TEE_Result trx_tsk_derive(trx_tsk *tsk, trx_vk *vk, TEE_UUID *uuid)
 {
     TEE_Result res;
     TEE_OperationHandle op_handle;
@@ -120,13 +120,13 @@ TEE_Result trx_tsk_derive(trx_tsk *tsk, trx_bk *bk, TEE_UUID *uuid)
     uint32_t tsk_buffer_size = trx_tsk_size;
     TEE_Attribute attr = {};
 
-    res = TEE_AllocateOperation(&op_handle, TEE_ALG_HMAC_SHA256, TEE_MODE_MAC, trx_bk_bit_size);
+    res = TEE_AllocateOperation(&op_handle, TEE_ALG_HMAC_SHA256, TEE_MODE_MAC, trx_vk_bit_size);
     if (res != TEE_SUCCESS)
     {
         goto out;
     }
 
-    res = TEE_SetOperationKey(op_handle, *bk);
+    res = TEE_SetOperationKey(op_handle, *vk);
     if (res != TEE_SUCCESS)
     {
         goto out;

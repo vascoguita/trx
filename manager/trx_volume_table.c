@@ -301,7 +301,7 @@ TEE_Result trx_volume_table_serialize(trx_volume_table *volume_table, void *data
         exp_dst_size += e->volume->mount_point_size;
         exp_dst_size += sizeof(size_t);
         exp_dst_size += e->volume->ree_dirname_size;
-        exp_dst_size += trx_bk_size;
+        exp_dst_size += trx_vk_size;
         exp_dst_size += sizeof(long unsigned int);
     }
     exp_dst_size += sizeof(unsigned long int);
@@ -333,14 +333,14 @@ TEE_Result trx_volume_table_serialize(trx_volume_table *volume_table, void *data
         cpy_ptr += sizeof(size_t);
         memcpy(cpy_ptr, e->volume->ree_dirname, e->volume->ree_dirname_size);
         cpy_ptr += e->volume->ree_dirname_size;
-        tmp_size = trx_bk_size;
-        res = trx_bk_to_bytes(e->volume->bk, cpy_ptr, &tmp_size);
+        tmp_size = trx_vk_size;
+        res = trx_vk_to_bytes(e->volume->vk, cpy_ptr, &tmp_size);
         if (res != TEE_SUCCESS)
         {
-            EMSG("failed calling function \'trx_bk_to_bytes\'");
+            EMSG("failed calling function \'trx_vk_to_bytes\'");
             return TEE_ERROR_GENERIC;
         }
-        cpy_ptr += trx_bk_size;
+        cpy_ptr += trx_vk_size;
         memcpy(cpy_ptr, &(e->volume->version), sizeof(long unsigned int));
         cpy_ptr += sizeof(long unsigned int);
     }
@@ -437,19 +437,19 @@ TEE_Result trx_volume_table_deserialize(trx_volume_table *volume_table, void *da
         memcpy(volume->ree_dirname, cpy_ptr, volume->ree_dirname_size);
         cpy_ptr += volume->ree_dirname_size;
         left -= volume->ree_dirname_size;
-        if (left < trx_bk_size)
+        if (left < trx_vk_size)
         {
             EMSG("failed checking size of \"data\" buffer");
             return TEE_ERROR_GENERIC;
         }
-        res = trx_bk_from_bytes(volume->bk, cpy_ptr, trx_bk_size);
+        res = trx_vk_from_bytes(volume->vk, cpy_ptr, trx_vk_size);
         if (res != TEE_SUCCESS)
         {
-            EMSG("failed calling function \'trx_bk_from_bytes\'");
+            EMSG("failed calling function \'trx_vk_from_bytes\'");
             return TEE_ERROR_GENERIC;
         }
-        cpy_ptr += trx_bk_size;
-        left -= trx_bk_size;
+        cpy_ptr += trx_vk_size;
+        left -= trx_vk_size;
         if (left < sizeof(long unsigned int))
         {
             EMSG("failed checking size of \"data\" buffer");

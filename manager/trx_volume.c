@@ -24,9 +24,9 @@ trx_volume *trx_volume_init(void)
         EMSG("failed calling function \'malloc\'");
         return NULL;
     }
-    if (!(volume->bk = trx_bk_init()))
+    if (!(volume->vk = trx_vk_init()))
     {
-        EMSG("failed calling function \'trx_bk_init\'");
+        EMSG("failed calling function \'trx_vk_init\'");
         trx_volume_clear(volume);
         return NULL;
     }
@@ -61,7 +61,7 @@ void trx_volume_clear(trx_volume *volume)
         }
         free(volume->mount_point);
         free(volume->ree_dirname);
-        trx_bk_clear(volume->bk);
+        trx_vk_clear(volume->vk);
     }
     free(volume);
 
@@ -81,10 +81,10 @@ trx_volume *trx_volume_create(char *mount_point, size_t mount_point_size, char *
         EMSG("failed calling function \'trx_volume_init\'");
         return NULL;
     }
-    res = trx_bk_gen(volume->bk);
+    res = trx_vk_gen(volume->vk);
     if (res != TEE_SUCCESS)
     {
-        EMSG("failed calling function \'trx_bk_gen\'");
+        EMSG("failed calling function \'trx_vk_gen\'");
         trx_volume_clear(volume);
         return NULL;
     }
@@ -350,7 +350,7 @@ TEE_Result trx_volume_save(trx_volume *volume)
         res = TEE_ERROR_GENERIC;
         goto out;
     }
-    res = trx_cipher_encrypt(volume->bk, &uuid, volume_data, volume_data_size,
+    res = trx_cipher_encrypt(volume->vk, &uuid, volume_data, volume_data_size,
                              volume->version, NULL, &data_enc_size);
     if (res != TEE_ERROR_SHORT_BUFFER)
     {
@@ -370,7 +370,7 @@ TEE_Result trx_volume_save(trx_volume *volume)
     memcpy(data, &data_enc_size, sizeof_size);
     data_enc = data + sizeof_size;
 
-    res = trx_cipher_encrypt(volume->bk, &uuid, volume_data, volume_data_size,
+    res = trx_cipher_encrypt(volume->vk, &uuid, volume_data, volume_data_size,
                              volume->version, data_enc, &data_enc_size);
     if (res != TEE_SUCCESS)
     {
@@ -464,7 +464,7 @@ TEE_Result trx_volume_load(trx_volume *volume)
         goto out;
     }
 
-    res = trx_cipher_decrypt(volume->bk, &uuid, data, data_size, &(volume->version), NULL, &volume_data_size);
+    res = trx_cipher_decrypt(volume->vk, &uuid, data, data_size, &(volume->version), NULL, &volume_data_size);
     if (res != TEE_ERROR_SHORT_BUFFER)
     {
         EMSG("failed calling function \'trx_cipher_decrypt\'");
@@ -479,7 +479,7 @@ TEE_Result trx_volume_load(trx_volume *volume)
         goto out;
     }
 
-    res = trx_cipher_decrypt(volume->bk, &uuid, data, data_size, &(volume->version), volume_data, &volume_data_size);
+    res = trx_cipher_decrypt(volume->vk, &uuid, data, data_size, &(volume->version), volume_data, &volume_data_size);
     if (res != TEE_SUCCESS)
     {
         EMSG("failed calling function \'trx_cipher_decrypt\'");
@@ -524,14 +524,14 @@ TEE_Result trx_volume_share(trx_volume *volume, char *R, size_t R_size)
     TEE_Result res;
     uint32_t buffer_size;
     trx_ibme *ibme = NULL;
-    Cipher *bk_enc = NULL;
-    uint8_t buffer[trx_bk_size];
+    Cipher *vk_enc = NULL;
+    uint8_t buffer[trx_vk_size];
     void *data = NULL;
     char *ree_path;
     size_t data_size, ree_path_size;
     int fd;
 
-    buffer_size = trx_bk_size;
+    buffer_size = trx_vk_size;
 
     DMSG("sharing volume");
 
@@ -543,10 +543,10 @@ TEE_Result trx_volume_share(trx_volume *volume, char *R, size_t R_size)
         goto out;
     }
 
-    res = trx_bk_to_bytes(volume->bk, buffer, &buffer_size);
+    res = trx_vk_to_bytes(volume->vk, buffer, &buffer_size);
     if (res != TEE_SUCCESS)
     {
-        EMSG("failed calling function \'trx_bk_to_bytes\'");
+        EMSG("failed calling function \'trx_vk_to_bytes\'");
         res = TEE_ERROR_GENERIC;
         goto out;
     }
@@ -564,21 +564,21 @@ TEE_Result trx_volume_share(trx_volume *volume, char *R, size_t R_size)
         res = TEE_ERROR_GENERIC;
         goto out;
     }
-    if (!(bk_enc = Cipher_init(*(ibme->pairing))))
+    if (!(vk_enc = Cipher_init(*(ibme->pairing))))
     {
         EMSG("failed calling function \'Cipher_init\'");
         res = TEE_ERROR_GENERIC;
         goto out;
     }
     if (1 == ibme_enc(*(ibme->pairing), ibme->mpk, ibme->ek, (unsigned char *)R, R_size, buffer,
-                      buffer_size, bk_enc))
+                      buffer_size, vk_enc))
     {
         EMSG("failed calling function \'ibme_enc\'");
         res = TEE_ERROR_GENERIC;
         goto out;
     }
 
-    if ((data_size = Cipher_snprint(NULL, 0, bk_enc) + 1) < 1)
+    if ((data_size = Cipher_snprint(NULL, 0, vk_enc) + 1) < 1)
     {
         EMSG("failed calling function \'Cipher_snprint\'");
         res = TEE_ERROR_GENERIC;
@@ -594,14 +594,14 @@ TEE_Result trx_volume_share(trx_volume *volume, char *R, size_t R_size)
 
     memcpy(data, &data_size, sizeof(size_t));
 
-    if (data_size != (size_t)(Cipher_snprint((char *)data + sizeof(size_t), data_size, bk_enc) + 1))
+    if (data_size != (size_t)(Cipher_snprint((char *)data + sizeof(size_t), data_size, vk_enc) + 1))
     {
         EMSG("failed calling function \'Cipher_snprint\'");
         res = TEE_ERROR_GENERIC;
         goto out;
     }
 
-    ree_path = path(volume->ree_dirname, trx_bk_ree_basename);
+    ree_path = path(volume->ree_dirname, trx_vk_ree_basename);
     ree_path_size = strlen(ree_path) + 1;
 
     res = ree_fs_api_create(ree_path, ree_path_size, &fd);
@@ -624,7 +624,7 @@ TEE_Result trx_volume_share(trx_volume *volume, char *R, size_t R_size)
 out:
     ree_fs_api_close(fd);
     free(data);
-    Cipher_clear(bk_enc);
+    Cipher_clear(vk_enc);
     trx_ibme_clear(ibme);
     return res;
 }
@@ -633,19 +633,19 @@ TEE_Result trx_volume_import(trx_volume *volume, char *S, size_t S_size)
 {
     uint32_t buffer_size;
     trx_ibme *ibme = NULL;
-    Cipher *bk_enc = NULL;
+    Cipher *vk_enc = NULL;
     TEE_Result res;
-    uint8_t buffer[trx_bk_size];
+    uint8_t buffer[trx_vk_size];
     void *data = NULL;
     char *ree_path = NULL;
     size_t ree_path_size, data_size, tmp_size;
     int fd;
 
-    buffer_size = trx_bk_size;
+    buffer_size = trx_vk_size;
 
     DMSG("importing volume");
 
-    if (!(ree_path = path(volume->ree_dirname, trx_bk_ree_basename)))
+    if (!(ree_path = path(volume->ree_dirname, trx_vk_ree_basename)))
     {
         EMSG("failed calling function \'path\'");
         res = TEE_ERROR_GENERIC;
@@ -699,13 +699,13 @@ TEE_Result trx_volume_import(trx_volume *volume, char *S, size_t S_size)
         res = TEE_ERROR_GENERIC;
         goto out;
     }
-    if (!(bk_enc = Cipher_init(*(ibme->pairing))))
+    if (!(vk_enc = Cipher_init(*(ibme->pairing))))
     {
         EMSG("failed calling function \'Cipher_init\'");
         res = TEE_ERROR_GENERIC;
         goto out;
     }
-    if (0 == Cipher_set_str(data, data_size, bk_enc))
+    if (0 == Cipher_set_str(data, data_size, vk_enc))
     {
         EMSG("failed calling function \'Cipher_set_str\'");
         res = TEE_ERROR_GENERIC;
@@ -713,17 +713,17 @@ TEE_Result trx_volume_import(trx_volume *volume, char *S, size_t S_size)
     }
 
     tmp_size = buffer_size;
-    if (ibme_dec(*(ibme->pairing), ibme->dk, (unsigned char *)S, S_size, bk_enc, (unsigned char *)buffer, &tmp_size) != 0)
+    if (ibme_dec(*(ibme->pairing), ibme->dk, (unsigned char *)S, S_size, vk_enc, (unsigned char *)buffer, &tmp_size) != 0)
     {
         EMSG("failed calling function \'ibme_dec\'");
         res = TEE_ERROR_GENERIC;
         goto out;
     }
 
-    res = trx_bk_from_bytes(volume->bk, buffer, buffer_size);
+    res = trx_vk_from_bytes(volume->vk, buffer, buffer_size);
     if (res != TEE_SUCCESS)
     {
-        EMSG("failed calling function \'trx_bk_from_bytes\'");
+        EMSG("failed calling function \'trx_vk_from_bytes\'");
         res = TEE_ERROR_GENERIC;
         goto out;
     }
@@ -731,7 +731,7 @@ TEE_Result trx_volume_import(trx_volume *volume, char *S, size_t S_size)
     DMSG("imported volume");
 
 out:
-    Cipher_clear(bk_enc);
+    Cipher_clear(vk_enc);
     trx_ibme_clear(ibme);
     free(data);
     ree_fs_api_close(fd);

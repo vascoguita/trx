@@ -187,7 +187,7 @@ TEE_Result trx_pobj_save(trx_pobj *pobj)
 
     DMSG("saving pobj, version: %lu", pobj->version);
 
-    res = trx_cipher_encrypt(pobj->tss->volume->bk, pobj->tss->uuid, pobj->data,
+    res = trx_cipher_encrypt(pobj->tss->volume->vk, pobj->tss->uuid, pobj->data,
                              pobj->data_size, pobj->version, NULL, &data_enc_size);
     if (res != TEE_ERROR_SHORT_BUFFER)
     {
@@ -206,7 +206,7 @@ TEE_Result trx_pobj_save(trx_pobj *pobj)
     memcpy(data, &data_enc_size, sizeof_size);
     data_enc = data + sizeof_size;
 
-    res = trx_cipher_encrypt(pobj->tss->volume->bk, pobj->tss->uuid, pobj->data,
+    res = trx_cipher_encrypt(pobj->tss->volume->vk, pobj->tss->uuid, pobj->data,
                              pobj->data_size, pobj->version, data_enc, &data_enc_size);
     if (res != TEE_SUCCESS)
     {
@@ -301,7 +301,7 @@ TEE_Result trx_pobj_load(trx_pobj *pobj)
     free(pobj->data);
     pobj->data_size = 0;
 
-    res = trx_cipher_decrypt(pobj->tss->volume->bk, pobj->tss->uuid, data, data_size,
+    res = trx_cipher_decrypt(pobj->tss->volume->vk, pobj->tss->uuid, data, data_size,
                              &(pobj->version), pobj->data, &(pobj->data_size));
     if (res != TEE_ERROR_SHORT_BUFFER)
     {
@@ -315,7 +315,7 @@ TEE_Result trx_pobj_load(trx_pobj *pobj)
         res = TEE_ERROR_GENERIC;
         goto out;
     }
-    res = trx_cipher_decrypt(pobj->tss->volume->bk, pobj->tss->uuid, data, data_size,
+    res = trx_cipher_decrypt(pobj->tss->volume->vk, pobj->tss->uuid, data, data_size,
                              &(pobj->version), pobj->data, &(pobj->data_size));
     if (res != TEE_SUCCESS)
     {

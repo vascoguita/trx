@@ -258,7 +258,7 @@ out:
     return res;
 }
 
-TEE_Result trx_cipher_encrypt(trx_bk *bk, TEE_UUID *uuid, void *src, size_t src_size,
+TEE_Result trx_cipher_encrypt(trx_vk *vk, TEE_UUID *uuid, void *src, size_t src_size,
                               unsigned long int new_version, void *dst, size_t *dst_size)
 {
     TEE_Result res;
@@ -319,7 +319,7 @@ TEE_Result trx_cipher_encrypt(trx_bk *bk, TEE_UUID *uuid, void *src, size_t src_
         res = TEE_ERROR_GENERIC;
         goto out;
     }
-    res = trx_tsk_derive(tsk, bk, uuid);
+    res = trx_tsk_derive(tsk, vk, uuid);
     if (res != TEE_SUCCESS)
     {
         goto out;
@@ -338,7 +338,7 @@ out:
     return res;
 }
 
-TEE_Result trx_cipher_decrypt(trx_bk *bk, TEE_UUID *uuid, void *src, size_t src_size,
+TEE_Result trx_cipher_decrypt(trx_vk *vk, TEE_UUID *uuid, void *src, size_t src_size,
                               unsigned long int *last_version, void *dst, size_t *dst_size)
 {
     TEE_Result res;
@@ -396,7 +396,7 @@ TEE_Result trx_cipher_decrypt(trx_bk *bk, TEE_UUID *uuid, void *src, size_t src_
         goto out;
     }
 
-    res = trx_tsk_derive(tsk, bk, uuid);
+    res = trx_tsk_derive(tsk, vk, uuid);
     if (res != TEE_SUCCESS)
     {
         goto out;
