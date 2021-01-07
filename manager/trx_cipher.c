@@ -3,7 +3,6 @@
 #include <string.h>
 #include "trx_keys.h"
 #include "trx_cipher.h"
-#include "trx_ibme.h"
 
 TEE_Result trx_cipher_encrypt_data(trx_dek *dek, void *data, size_t data_size, unsigned long int new_version,
                                    void *dst, size_t *dst_size)

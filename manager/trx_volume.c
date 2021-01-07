@@ -535,7 +535,7 @@ TEE_Result trx_volume_share(trx_volume *volume, char *R, size_t R_size)
 
     DMSG("sharing volume");
 
-    if(!volume || !R || !R_size)
+    if (!volume || !R || !R_size)
     {
         EMSG("failed calling checking if volume is not NULL or receiver id is not NULL"
              "or size of receiver id is greater than 0");
@@ -629,100 +629,111 @@ out:
     return res;
 }
 
-/*int trx_volume_import(trx_volume *volume, char *S, size_t S_size)
+TEE_Result trx_volume_import(trx_volume *volume, char *S, size_t S_size)
 {
-    //TEE_UUID uuid = TA_TRX_MANAGER_UUID;
     uint32_t buffer_size;
-    size_t tmp_size;
-    trx_ibme *ibme;
-    Cipher *bk_enc;
+    trx_ibme *ibme = NULL;
+    Cipher *bk_enc = NULL;
     TEE_Result res;
     uint8_t buffer[trx_bk_size];
     void *data = NULL;
-    size_t data_size;
     char *ree_path = NULL;
-    size_t ree_path_size;
+    size_t ree_path_size, data_size, tmp_size;
     int fd;
 
     buffer_size = trx_bk_size;
 
-    if (!(ree_path = path(volume->ree_dirname, DEFAULT_BK_BASENAME)))
+    DMSG("importing volume");
+
+    if (!(ree_path = path(volume->ree_dirname, trx_bk_ree_basename)))
     {
-        return 1;
+        EMSG("failed calling function \'path\'");
+        res = TEE_ERROR_GENERIC;
+        goto out;
     }
     ree_path_size = strlen(ree_path) + 1;
 
     res = ree_fs_api_open(ree_path, ree_path_size, &fd);
     if (res != TEE_SUCCESS)
     {
-        return 1;
+        EMSG("failed calling function \'ree_fs_api_open\'");
+        res = TEE_ERROR_GENERIC;
+        goto out;
     }
 
     tmp_size = sizeof(size_t);
     res = ree_fs_api_read(fd, 0, &data_size, &tmp_size);
     if ((res != TEE_SUCCESS) || (tmp_size != sizeof(size_t)))
     {
-        ree_fs_api_close(fd);
-        return 1;
+        EMSG("failed calling function \'ree_fs_api_read\'");
+        res = TEE_ERROR_GENERIC;
+        goto out;
     }
 
     if (!(data = malloc(data_size)))
     {
-        ree_fs_api_close(fd);
-        return 1;
+        EMSG("failed calling function \'malloc\'");
+        res = TEE_ERROR_GENERIC;
+        goto out;
     }
 
     tmp_size = data_size;
     res = ree_fs_api_read(fd, sizeof(size_t), data, &tmp_size);
     if ((res != TEE_SUCCESS) || (tmp_size != data_size))
     {
-        free(data);
-        ree_fs_api_close(fd);
-        return 1;
+        EMSG("failed calling function \'ree_fs_api_read\'");
+        res = TEE_ERROR_GENERIC;
+        goto out;
     }
-    ree_fs_api_close(fd);
 
     if (!(ibme = trx_ibme_init()))
     {
-        free(data);
-        return 1;
+        EMSG("failed calling function \'trx_ibme_init\'");
+        res = TEE_ERROR_GENERIC;
+        goto out;
     }
     res = trx_ibme_load(ibme);
     if (res != TEE_SUCCESS)
     {
-        free(data);
-        trx_ibme_clear(ibme);
-        return 1;
+        EMSG("failed calling function \'trx_ibme_load\'");
+        res = TEE_ERROR_GENERIC;
+        goto out;
     }
     if (!(bk_enc = Cipher_init(*(ibme->pairing))))
     {
-        free(data);
-        trx_ibme_clear(ibme);
-        return 1;
+        EMSG("failed calling function \'Cipher_init\'");
+        res = TEE_ERROR_GENERIC;
+        goto out;
     }
     if (0 == Cipher_set_str(data, data_size, bk_enc))
     {
-        Cipher_clear(bk_enc);
-        trx_ibme_clear(ibme);
-        return 1;
+        EMSG("failed calling function \'Cipher_set_str\'");
+        res = TEE_ERROR_GENERIC;
+        goto out;
     }
-
-    free(data);
 
     tmp_size = buffer_size;
     if (ibme_dec(*(ibme->pairing), ibme->dk, (unsigned char *)S, S_size, bk_enc, (unsigned char *)buffer, &tmp_size) != 0)
     {
-        Cipher_clear(bk_enc);
-        trx_ibme_clear(ibme);
-        return 1;
+        EMSG("failed calling function \'ibme_dec\'");
+        res = TEE_ERROR_GENERIC;
+        goto out;
     }
-    Cipher_clear(bk_enc);
-    trx_ibme_clear(ibme);
 
     res = trx_bk_from_bytes(volume->bk, buffer, buffer_size);
     if (res != TEE_SUCCESS)
     {
-        return 1;
+        EMSG("failed calling function \'trx_bk_from_bytes\'");
+        res = TEE_ERROR_GENERIC;
+        goto out;
     }
-    return 0;
-}*/
+
+    DMSG("imported volume");
+
+out:
+    Cipher_clear(bk_enc);
+    trx_ibme_clear(ibme);
+    free(data);
+    ree_fs_api_close(fd);
+    return res;
+}

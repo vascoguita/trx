@@ -46,8 +46,8 @@ TEE_Result setup(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
          "ek_str: \"%s\" with ek_str_size: %zu, dk_str: \"%s\" with dk_str_size: %zu, ",
          param_str, param_str_size, mpk_str, mpk_str_size, ek_str, ek_str_size, dk_str, dk_str_size);
 
-    if(!(ibme = trx_ibme_create(param_str, param_str_size, mpk_str, mpk_str_size,
-                          ek_str, ek_str_size, dk_str, dk_str_size)))
+    if (!(ibme = trx_ibme_create(param_str, param_str_size, mpk_str, mpk_str_size,
+                                 ek_str, ek_str_size, dk_str, dk_str_size)))
     {
         EMSG("failed calling function \'trx_ibme_create\'");
         return TEE_ERROR_GENERIC;
@@ -406,24 +406,23 @@ TEE_Result list(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
 
 TEE_Result mount(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
 {
-    /*uint32_t exp_param_types;
+    uint32_t exp_param_types;
     char *S, *ree_dirname, *mount_point;
     size_t S_size, ree_dirname_size, mount_point_size;
     trx_volume *volume;
-    volume_list_head *volume_lh;
-    TEE_Result res;*/
+    TEE_Result res;
 
     (void)&sess_ctx;
     (void)&param_types;
     (void)&params;
 
-    /*
     DMSG("has been called");
 
     exp_param_types = TEE_PARAM_TYPES(TEE_PARAM_TYPE_MEMREF_INPUT, TEE_PARAM_TYPE_MEMREF_INPUT,
                                       TEE_PARAM_TYPE_MEMREF_INPUT, TEE_PARAM_TYPE_NONE);
     if (param_types != exp_param_types)
     {
+        EMSG("failed checking parameter types");
         return TEE_ERROR_BAD_PARAMETERS;
     }
 
@@ -434,66 +433,61 @@ TEE_Result mount(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
     mount_point = params[2].memref.buffer;
     mount_point_size = (size_t)params[2].memref.size;
 
-    if(!trx_authorization_mount(mount_point, S)) {
-        EMSG("TA_TRX_MANAGER_CMD_MOUNT failed calling function \'trx_authorization_mount\'");
+    DMSG("mounting volume from sender: \"%s\" with sender size: %zu and ree_dirname: \"%s\""
+         "with ree_dirname_size: %zu on mount_point: \"%s\" with mount_point size: %zu",
+         S, S_size, ree_dirname, ree_dirname_size, mount_point, mount_point_size);
+
+    if (!trx_authorization_mount(mount_point, S))
+    {
+        EMSG("failed calling function \'trx_authorization_mount\'");
         return TEE_ERROR_GENERIC;
     }
 
     if (!(volume = trx_volume_init()))
     {
-        EMSG("TA_TRX_MANAGER_CMD_MOUNT failed calling function \'trx_volume_init\'");
+        EMSG("failed calling function \'trx_volume_init\'");
         return TEE_ERROR_GENERIC;
     }
 
+    res = trx_volume_table_add(volume_table, volume);
+    if (res != TEE_SUCCESS)
+    {
+        EMSG("failed calling function \'trx_volume_table_add\'");
+        trx_volume_clear(volume);
+        return TEE_ERROR_GENERIC;
+    }
     if (!(volume->mount_point = strndup(mount_point, mount_point_size)))
     {
-        EMSG("TA_TRX_MANAGER_CMD_MOUNT failed calling function \'strdup\'");
-        trx_volume_clear(volume);
+        EMSG("failed calling function \'strndup\'");
         return TEE_ERROR_GENERIC;
     }
     volume->mount_point_size = mount_point_size;
-    volume->ree_dirname = strndup(ree_dirname, ree_dirname_size);
+    if (!(volume->ree_dirname = strndup(ree_dirname, ree_dirname_size)))
+    {
+        EMSG("failed calling function \'strndup\'");
+        return TEE_ERROR_GENERIC;
+    }
     volume->ree_dirname_size = ree_dirname_size;
 
-    if (!(volume_lh = trx_volume_list_init()))
-    {
-        EMSG("TA_TRX_MANAGER_CMD_MOUNT failed calling function \'trx_volume_list_init\'");
-        trx_volume_clear(volume);
-        return TEE_ERROR_GENERIC;
-    }
-    if (trx_volume_list_load(volume_lh) != TEE_SUCCESS)
-    {
-        EMSG("TA_TRX_MANAGER_CMD_MOUNT failed calling function \'trx_volume_list_load\'");
-        trx_volume_clear(volume);
-        trx_volume_list_clear(volume_lh);
-        return TEE_ERROR_GENERIC;
-    }
-    if (trx_volume_list_add(volume, volume_lh) != 0)
-    {
-        EMSG("TA_TRX_MANAGER_CMD_MOUNT failed calling function \'trx_volume_list_add\'");
-        trx_volume_clear(volume);
-        trx_volume_list_clear(volume_lh);
-        return TEE_ERROR_GENERIC;
-    }
-    if(trx_volume_import(volume, S, S_size) != 0)
-    {
-        EMSG("TA_TRX_MANAGER_CMD_MOUNT failed calling function \'trx_volume_import\'");
-        trx_volume_list_clear(volume_lh);
-        return TEE_ERROR_GENERIC;
-    }
-
-    res = trx_volume_list_save(volume_lh);
+    res = trx_volume_import(volume, S, S_size);
     if (res != TEE_SUCCESS)
     {
-        EMSG("TA_TRX_MANAGER_CMD_MOUNT failed calling function \'trx_volume_list_save\'");
-        trx_volume_list_clear(volume_lh);
+        EMSG("failed calling function \'trx_volume_import\'");
         return TEE_ERROR_GENERIC;
     }
-    trx_volume_list_clear(volume_lh);
-    return res;*/
 
-    //FIXME
-    return TEE_ERROR_GENERIC;
+    res = trx_volume_table_save(volume_table);
+    if (res != TEE_SUCCESS)
+    {
+        EMSG("failed calling function \'trx_volume_table_save\'");
+        return TEE_ERROR_GENERIC;
+    }
+
+    DMSG("mounted volume from sender: \"%s\" with sender size: %zu and ree_dirname: \"%s\""
+         "with ree_dirname_size: %zu on mount_point: \"%s\" with mount_point size: %zu",
+         S, S_size, volume->ree_dirname, volume->ree_dirname_size, volume->mount_point, volume->mount_point_size);
+
+    return res;
 }
 
 TEE_Result share(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
@@ -522,7 +516,8 @@ TEE_Result share(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
     mount_point_size = params[1].memref.size;
 
     DMSG("sharing volume mounted on mount_point: \"%s\" with mount_point size size: %zu with receiver: \"%s\" "
-         "with receiver size %zu", mount_point, mount_point_size, R, R_size);
+         "with receiver size %zu",
+         mount_point, mount_point_size, R, R_size);
 
     if (!(volume = trx_volume_table_get(volume_table, mount_point, mount_point_size)))
     {
@@ -544,7 +539,8 @@ TEE_Result share(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
     }
 
     DMSG("shared volume mounted on mount_point: \"%s\" with mount_point size size: %zu with receiver: \"%s\" "
-         "with receiver size %zu", volume->mount_point, volume->mount_point_size, R, R_size);
+         "with receiver size %zu",
+         volume->mount_point, volume->mount_point_size, R, R_size);
 
     return res;
 }
