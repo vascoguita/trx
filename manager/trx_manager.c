@@ -361,10 +361,6 @@ TEE_Result list(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
 
     tmp_data_size = (size_t)*data_size;
     res = trx_volume_table_serialize_paths(volume_table, uuid, data, &tmp_data_size);
-    if(res == TEE_ERROR_SHORT_BUFFER)
-    {
-        
-    }
     *data_size = (uint32_t)tmp_data_size;
 
     return res;

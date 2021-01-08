@@ -26,6 +26,7 @@ TEE_Result TA_OpenSessionEntryPoint(uint32_t param_types, TEE_Param params[4], v
     uint8_t *cpy_ptr;
     size_t left;
     long unsigned int n_pobjs, i;
+    trx_handle handle;
 
     input_size = 100;
 
@@ -41,6 +42,12 @@ TEE_Result TA_OpenSessionEntryPoint(uint32_t param_types, TEE_Param params[4], v
         return TEE_ERROR_BAD_PARAMETERS;
     }
 
+    res = trx_handle_init(&handle);
+    if(res != TEE_SUCCESS)
+    {
+        EMSG("trx_handle_init failed with code 0x%x", res);
+        return res;
+    }
     while (1)
     {
         res = TUI->input("Enter command: ", input, input_size);
@@ -68,7 +75,7 @@ TEE_Result TA_OpenSessionEntryPoint(uint32_t param_types, TEE_Param params[4], v
             }
             data = strdup(input);
             data_size = strlen(data) + 1;
-            res = trx_write(path, path_size, data, data_size);
+            res = trx_write(handle, path, path_size, data, data_size);
             if (res != TEE_SUCCESS)
             {
                 DMSG("trx_write failed with code 0x%x", res);
@@ -91,7 +98,7 @@ TEE_Result TA_OpenSessionEntryPoint(uint32_t param_types, TEE_Param params[4], v
             path_size = strlen(path) + 1;
             data = NULL;
             data_size = 0;
-            res = trx_read(path, path_size, data, &data_size);
+            res = trx_read(handle, path, path_size, data, &data_size);
             if (res != TEE_ERROR_SHORT_BUFFER)
             {
                 free(path);
@@ -104,7 +111,7 @@ TEE_Result TA_OpenSessionEntryPoint(uint32_t param_types, TEE_Param params[4], v
                 DMSG("malloc failed");
                 return TEE_ERROR_GENERIC;
             }
-            res = trx_read(path, path_size, data, &data_size);
+            res = trx_read(handle, path, path_size, data, &data_size);
             if (res != TEE_SUCCESS)
             {
                 DMSG("trx_read failed with code 0x%x", res);
@@ -126,7 +133,7 @@ TEE_Result TA_OpenSessionEntryPoint(uint32_t param_types, TEE_Param params[4], v
         {
             data = NULL;
             data_size = 0;
-            res = trx_list(data, &data_size);
+            res = trx_list(handle, data, &data_size);
             if (res != TEE_ERROR_SHORT_BUFFER)
             {
                 DMSG("trx_list failed with code 0x%x", res);
@@ -137,7 +144,7 @@ TEE_Result TA_OpenSessionEntryPoint(uint32_t param_types, TEE_Param params[4], v
                 DMSG("malloc failed");
                 return TEE_ERROR_GENERIC;
             }
-            res = trx_list(data, &data_size);
+            res = trx_list(handle, data, &data_size);
             if (res != TEE_SUCCESS)
             {
                 DMSG("trx_list failed with code 0x%x", res);
@@ -230,7 +237,7 @@ TEE_Result TA_OpenSessionEntryPoint(uint32_t param_types, TEE_Param params[4], v
             }
             data = strdup(input);
             data_size = strlen(data) + 1;
-            res = trx_mount((unsigned char *)id, id_size, path, path_size, data, data_size);
+            res = trx_mount(handle, (unsigned char *)id, id_size, path, path_size, data, data_size);
             if (res != TEE_SUCCESS)
             {
                 DMSG("trx_mount failed with code 0x%x", res);
@@ -262,7 +269,7 @@ TEE_Result TA_OpenSessionEntryPoint(uint32_t param_types, TEE_Param params[4], v
             }
             data = strdup(input);
             data_size = strlen(data) + 1;
-            res = trx_share((unsigned char *)data, data_size, path, path_size);
+            res = trx_share(handle, (unsigned char *)data, data_size, path, path_size);
             if (res != TEE_SUCCESS)
             {
                 DMSG("trx_share failed with code 0x%x", res);
@@ -278,6 +285,7 @@ TEE_Result TA_OpenSessionEntryPoint(uint32_t param_types, TEE_Param params[4], v
             break;
         }
     }
+    trx_handle_clear(handle);
 
     return res;
 }
