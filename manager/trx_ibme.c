@@ -5,7 +5,6 @@
 #include <ibme/ibme.h>
 
 #include "trx_ibme.h"
-#include "trx_utils.h"
 
 trx_ibme *trx_ibme_init(void)
 {
@@ -214,198 +213,245 @@ TEE_Result trx_ibme_set_ek(trx_ibme *ibme, char *ek_str, size_t ek_str_size)
     return TEE_SUCCESS;
 }
 
-int trx_ibme_snprint(char *s, size_t n, trx_ibme *ibme)
+TEE_Result trx_ibme_serialize(trx_ibme *ibme, void *data, size_t *data_size)
 {
-    size_t result, left;
-    int status;
+    size_t exp_dst_size;
+    size_t tmp_size;
+    uint8_t *cpy_ptr;
+    int mpk_len, ek_len, dk_len;
 
-    result = 0;
+    DMSG("checking required buffer size to serialize ibme");
 
-    status = snprintf(s, n, "[");
-    if (status < 0)
+    if (!ibme)
     {
-        return status;
+        EMSG("failed checking if ibme is not NULL");
+        return TEE_ERROR_GENERIC;
     }
-    clip_sub(&result, status, &left, n);
-    status = snprintf(s + result, left, "%zu", ibme->param_str_size);
-    if (status < 0)
+
+    exp_dst_size = sizeof(size_t);
+    exp_dst_size += ibme->param_str_size;
+    exp_dst_size += sizeof(size_t);
+    if((mpk_len = MPK_snprint(NULL, 0, ibme->mpk)) < 0)
     {
-        return status;
+        EMSG("failed calling function \'MPK_snprint\'");
+        return TEE_ERROR_GENERIC;
     }
-    clip_sub(&result, status, &left, n);
-    status = snprintf(s + result, left, ", ");
-    if (status < 0)
+    exp_dst_size += mpk_len + 1;
+    exp_dst_size += sizeof(size_t);
+    if((ek_len = EK_snprint(NULL, 0, ibme->ek)) < 0)
     {
-        return status;
+        EMSG("failed calling function \'EK_snprint\'");
+        return TEE_ERROR_GENERIC;
     }
-    clip_sub(&result, status, &left, n);
-    status = snprintf(s + result, left, "%s", ibme->param_str);
-    if (status < 0)
+    exp_dst_size += ek_len + 1;
+    exp_dst_size += sizeof(size_t);
+    if((dk_len = DK_snprint(NULL, 0, ibme->dk)) < 0)
     {
-        return status;
+        EMSG("failed calling function \'DK_snprint\'");
+        return TEE_ERROR_GENERIC;
     }
-    clip_sub(&result, status, &left, n);
-    status = snprintf(s + result, left, ", ");
-    if (status < 0)
+    exp_dst_size += dk_len + 1;
+
+    if (!data)
     {
-        return status;
+        *data_size = exp_dst_size;
+        DMSG("defining required buffer size to serialize ibme: %zu", *data_size);
+        return TEE_ERROR_SHORT_BUFFER;
     }
-    clip_sub(&result, status, &left, n);
-    status = MPK_snprint(s + result, left, ibme->mpk);
-    if (status < 0)
+    if (*data_size != exp_dst_size)
     {
-        return status;
+        EMSG("failed checking size of \"data\" buffer, provided_size: %zu, required_size: %zu", *data_size, exp_dst_size);
+        return TEE_ERROR_GENERIC;
     }
-    clip_sub(&result, status, &left, n);
-    status = snprintf(s + result, left, ", ");
-    if (status < 0)
+
+    DMSG("serializing ibme");
+
+    cpy_ptr = data;
+    memcpy(cpy_ptr, &(ibme->param_str_size), sizeof(size_t));
+    cpy_ptr += sizeof(size_t);
+    memcpy(cpy_ptr, ibme->param_str, ibme->param_str_size);
+    cpy_ptr += ibme->param_str_size;
+    tmp_size = mpk_len + 1;
+    memcpy(cpy_ptr, &(tmp_size), sizeof(size_t));
+    cpy_ptr += sizeof(size_t);
+    if(MPK_snprint((char *)cpy_ptr, tmp_size, ibme->mpk) < 0)
     {
-        return status;
+        EMSG("failed calling function \'MPK_snprint\'");
+        return TEE_ERROR_GENERIC;
     }
-    clip_sub(&result, status, &left, n);
-    status = EK_snprint(s + result, left, ibme->ek);
-    if (status < 0)
+    cpy_ptr += tmp_size;
+    tmp_size = ek_len + 1;
+    memcpy(cpy_ptr, &(tmp_size), sizeof(size_t));
+    cpy_ptr += sizeof(size_t);
+    if(EK_snprint((char *)cpy_ptr, tmp_size, ibme->ek) < 0)
     {
-        return status;
+        EMSG("failed calling function \'EK_snprint\'");
+        return TEE_ERROR_GENERIC;
     }
-    clip_sub(&result, status, &left, n);
-    status = snprintf(s + result, left, ", ");
-    if (status < 0)
+    cpy_ptr += tmp_size;
+    tmp_size = dk_len + 1;
+    memcpy(cpy_ptr, &(tmp_size), sizeof(size_t));
+    cpy_ptr += sizeof(size_t);
+    if(DK_snprint((char *)cpy_ptr, tmp_size, ibme->dk) < 0)
     {
-        return status;
+        EMSG("failed calling function \'DK_snprint\'");
+        return TEE_ERROR_GENERIC;
     }
-    clip_sub(&result, status, &left, n);
-    status = DK_snprint(s + result, left, ibme->dk);
-    if (status < 0)
-    {
-        return status;
-    }
-    clip_sub(&result, status, &left, n);
-    status = snprintf(s + result, left, "]");
-    if (status < 0)
-    {
-        return status;
-    }
-    return (int)result + status;
+    cpy_ptr += tmp_size;
+
+    DMSG("serialized ibme");
+
+    return TEE_SUCCESS;
 }
 
-int trx_ibme_set_str(char *s, size_t n, trx_ibme *ibme)
+TEE_Result trx_ibme_deserialize(trx_ibme *ibme, void *data, size_t data_size)
 {
-    size_t result, left;
-    int status;
+    uint8_t *cpy_ptr;
+    size_t left, tmp_size;
+    TEE_Result res;
 
-    result = 0;
-    status = strlen("[");
-    if (strncmp(s, "[", status) != 0)
+    DMSG("deserializing ibme from buffer with size: %zu", data_size);
+
+    if (!data || !ibme || !data_size)
     {
-        return 0;
-    }
-    clip_sub(&result, status, &left, n);
-    if ((ibme->param_str_size = strtoul(s + result, NULL, 0)) == 0)
-    {
-        return 0;
-    }
-    status = snprintf(NULL, 0, "%zu", ibme->param_str_size);
-    clip_sub(&result, status, &left, n);
-    if ((ibme->param_str = (void *)malloc(ibme->param_str_size)) == NULL)
-    {
-        return 0;
-    }
-    status = strlen(", ");
-    if (strncmp(s + result, ", ", status) != 0)
-    {
-        return 0;
-    }
-    clip_sub(&result, status, &left, n);
-    if ((ibme->param_str = strndup(s + result, ibme->param_str_size - 1)) == NULL)
-    {
-        return 0;
-    }
-    if (1 == pairing_init_set_str(*(ibme->pairing), ibme->param_str))
-    {
-        return 0;
-    }
-    if (!(ibme->mpk = MPK_init(*(ibme->pairing))))
-    {
-        return 0;
-    }
-    if (!(ibme->ek = EK_init(*(ibme->pairing))))
-    {
-        return 0;
-    }
-    if (!(ibme->dk = DK_init(*(ibme->pairing))))
-    {
-        return 0;
-    }
-    status = strlen(ibme->param_str);
-    clip_sub(&result, status, &left, n);
-    status = strlen(", ");
-    if (strncmp(s + result, ", ", status) != 0)
-    {
-        return 0;
-    }
-    clip_sub(&result, status, &left, n);
-    if ((status = MPK_set_str(s + result, left, ibme->mpk)) == 0)
-    {
-        return 0;
-    }
-    clip_sub(&result, status, &left, n);
-    status = strlen(", ");
-    if (strncmp(s + result, ", ", status) != 0)
-    {
-        return 0;
-    }
-    clip_sub(&result, status, &left, n);
-    if ((status = EK_set_str(s + result, left, ibme->ek)) == 0)
-    {
-        return 0;
-    }
-    clip_sub(&result, status, &left, n);
-    status = strlen(", ");
-    if (strncmp(s + result, ", ", status) != 0)
-    {
-        return 0;
-    }
-    clip_sub(&result, status, &left, n);
-    if ((status = DK_set_str(s + result, left, ibme->dk)) == 0)
-    {
-        return 0;
-    }
-    clip_sub(&result, status, &left, n);
-    status = strlen("]");
-    if (strncmp(s + result, "]", status) != 0)
-    {
-        return 0;
+        EMSG("failed calling checking if ibme is not NULL or \"data\" buffer is not NULL"
+             "or size of \"data\" buffer is greater than 0");
+        return TEE_ERROR_GENERIC;
     }
 
-    return (int)result + status;
+    cpy_ptr = data;
+    left = data_size;
+    if (left < sizeof(size_t))
+    {
+        EMSG("failed checking size of \"data\" buffer");
+        return TEE_ERROR_GENERIC;
+    }
+    memcpy(&tmp_size, cpy_ptr, sizeof(size_t));
+    cpy_ptr += sizeof(size_t);
+    left -= sizeof(size_t);
+
+    if (left < tmp_size)
+    {
+        EMSG("failed checking size of \"data\" buffer");
+        return TEE_ERROR_GENERIC;
+    }
+    res = trx_ibme_set_param_str(ibme, (char *)cpy_ptr, tmp_size);
+    if (res != TEE_SUCCESS)
+    {
+        EMSG("failed calling function \'trx_ibme_set_param_str\'");
+        return TEE_ERROR_GENERIC;
+    }
+    cpy_ptr += tmp_size;
+    left -= tmp_size;
+
+    if (left < sizeof(size_t))
+    {
+        EMSG("failed checking size of \"data\" buffer");
+        return TEE_ERROR_GENERIC;
+    }
+    memcpy(&tmp_size, cpy_ptr, sizeof(size_t));
+    cpy_ptr += sizeof(size_t);
+    left -= sizeof(size_t);
+
+    if (left < tmp_size)
+    {
+        EMSG("failed checking size of \"data\" buffer");
+        return TEE_ERROR_GENERIC;
+    }
+    res = trx_ibme_set_mpk(ibme, (char *)cpy_ptr, tmp_size);
+    if (res != TEE_SUCCESS)
+    {
+        EMSG("failed calling function \'trx_ibme_set_mpk\'");
+        return TEE_ERROR_GENERIC;
+    }
+    cpy_ptr += tmp_size;
+    left -= tmp_size;
+
+    if (left < sizeof(size_t))
+    {
+        EMSG("failed checking size of \"data\" buffer");
+        return TEE_ERROR_GENERIC;
+    }
+    memcpy(&tmp_size, cpy_ptr, sizeof(size_t));
+    cpy_ptr += sizeof(size_t);
+    left -= sizeof(size_t);
+
+    if (left < tmp_size)
+    {
+        EMSG("failed checking size of \"data\" buffer");
+        return TEE_ERROR_GENERIC;
+    }
+    res = trx_ibme_set_ek(ibme, (char *)cpy_ptr, tmp_size);
+    if (res != TEE_SUCCESS)
+    {
+        EMSG("failed calling function \'trx_ibme_set_ek\'");
+        return TEE_ERROR_GENERIC;
+    }
+    cpy_ptr += tmp_size;
+    left -= tmp_size;
+
+    if (left < sizeof(size_t))
+    {
+        EMSG("failed checking size of \"data\" buffer");
+        return TEE_ERROR_GENERIC;
+    }
+    memcpy(&tmp_size, cpy_ptr, sizeof(size_t));
+    cpy_ptr += sizeof(size_t);
+    left -= sizeof(size_t);
+
+    if (left < tmp_size)
+    {
+        EMSG("failed checking size of \"data\" buffer");
+        return TEE_ERROR_GENERIC;
+    }
+    res = trx_ibme_set_dk(ibme, (char *)cpy_ptr, tmp_size);
+    if (res != TEE_SUCCESS)
+    {
+        EMSG("failed calling function \'trx_ibme_set_dk\'");
+        return TEE_ERROR_GENERIC;
+    }
+    cpy_ptr += tmp_size;
+    left -= tmp_size;
+
+    if (left != 0)
+    {
+        EMSG("failed checking size of \"data\" buffer");
+        return TEE_ERROR_GENERIC;
+    }
+
+    DMSG("deserialized ibme");
+
+    return TEE_SUCCESS;
 }
 
 TEE_Result trx_ibme_save(trx_ibme *ibme)
 {
-    int ibme_str_len, id_size;
-    char *ibme_str = NULL, *id = NULL;
+    int id_size;
+    char *ibme_data = NULL, *id = NULL;
+    size_t ibme_data_size;
     TEE_Result res;
     uint32_t flags;
     TEE_ObjectHandle obj = TEE_HANDLE_NULL;
 
     DMSG("saving ibme");
 
-    if ((ibme_str_len = trx_ibme_snprint(NULL, 0, ibme)) < 1)
+    res = trx_ibme_serialize(ibme, ibme_data, &ibme_data_size);
+    if (res != TEE_ERROR_SHORT_BUFFER)
     {
-        EMSG("failed calling function \'trx_ibme_snprint\'");
+        EMSG("failed calling function \'trx_ibme_serialize\'");
         res = TEE_ERROR_GENERIC;
         goto out;
     }
-    if ((ibme_str = (char *)malloc((ibme_str_len + 1) * sizeof(char))) == NULL)
+    if (!(ibme_data = malloc(ibme_data_size)))
     {
         EMSG("failed calling function \'malloc\'");
         res = TEE_ERROR_GENERIC;
         goto out;
     }
-    if (ibme_str_len != trx_ibme_snprint(ibme_str, (ibme_str_len + 1), ibme))
+    res = trx_ibme_serialize(ibme, ibme_data, &ibme_data_size);
+    if (res != TEE_SUCCESS)
     {
-        EMSG("failed calling function \'trx_ibme_snprint\'");
+        EMSG("failed calling function \'trx_ibme_serialize\'");
         res = TEE_ERROR_GENERIC;
         goto out;
     }
@@ -422,7 +468,7 @@ TEE_Result trx_ibme_save(trx_ibme *ibme)
     flags = TEE_DATA_FLAG_ACCESS_READ;
 
     res = TEE_CreatePersistentObject(TEE_STORAGE_PRIVATE, id, id_size, flags,
-                                     TEE_HANDLE_NULL, ibme_str, ibme_str_len + 1, &obj);
+                                     TEE_HANDLE_NULL, ibme_data, ibme_data_size, &obj);
     if (res != TEE_SUCCESS)
     {
         EMSG("failed calling function \'TEE_CreatePersistentObject\'");
@@ -438,7 +484,7 @@ out:
     {
         TEE_CloseObject(obj);
     }
-    free(ibme_str);
+    free(ibme_data);
 
     return res;
 }
@@ -446,7 +492,7 @@ out:
 TEE_Result trx_ibme_load(trx_ibme *ibme)
 {
     int id_size;
-    char *ibme_str = NULL, *id = NULL;
+    char *ibme_data = NULL, *id = NULL;
     TEE_Result res;
     uint32_t flags, count;
     TEE_ObjectHandle obj = TEE_HANDLE_NULL;
@@ -480,22 +526,23 @@ TEE_Result trx_ibme_load(trx_ibme *ibme)
         res = TEE_ERROR_GENERIC;
         goto out;
     }
-    if (!(ibme_str = (char *)malloc(obj_info.dataSize)))
+    if (!(ibme_data = (char *)malloc(obj_info.dataSize)))
     {
         EMSG("failed calling function \'malloc\'");
         res = TEE_ERROR_GENERIC;
         goto out;
     }
-    res = TEE_ReadObjectData(obj, ibme_str, obj_info.dataSize, &count);
+    res = TEE_ReadObjectData(obj, ibme_data, obj_info.dataSize, &count);
     if (res != TEE_SUCCESS || count != obj_info.dataSize)
     {
         EMSG("failed calling function \'TEE_ReadObjectData\'");
         res = TEE_ERROR_GENERIC;
         goto out;
     }
-    if (trx_ibme_set_str(ibme_str, obj_info.dataSize, ibme) == 0)
+    res = trx_ibme_deserialize(ibme, ibme_data, obj_info.dataSize);
+    if (res != TEE_SUCCESS)
     {
-        EMSG("failed calling function \'trx_ibme_set_str\'");
+        EMSG("failed calling function \'trx_ibme_deserialize\'");
         res = TEE_ERROR_GENERIC;
         goto out;
     }
@@ -507,7 +554,7 @@ out:
     {
         TEE_CloseObject(obj);
     }
-    free(ibme_str);
+    free(ibme_data);
     TEE_Free(id);
     return res;
 }

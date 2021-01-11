@@ -23,8 +23,8 @@ TEE_Result trx_ibme_set_mpk(trx_ibme *ibme, char *mpk_str, size_t mpk_str_size);
 TEE_Result trx_ibme_set_dk(trx_ibme *ibme, char *dk_str, size_t dk_str_size);
 TEE_Result trx_ibme_set_ek(trx_ibme *ibme, char *ek_str, size_t ek_str_size);
 
-int trx_ibme_snprint(char *s, size_t n, trx_ibme *ibme);
-int trx_ibme_set_str(char *s, size_t n, trx_ibme *ibme);
+TEE_Result trx_ibme_serialize(trx_ibme *ibme, void *data, size_t *data_size);
+TEE_Result trx_ibme_deserialize(trx_ibme *ibme, void *data, size_t data_size);
 
 TEE_Result trx_ibme_save(trx_ibme *ibme);
 TEE_Result trx_ibme_load(trx_ibme *ibme);

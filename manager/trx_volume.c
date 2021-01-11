@@ -111,11 +111,12 @@ trx_volume *trx_volume_create(char *mount_point, size_t mount_point_size, char *
 
 char *trx_volume_gen_ree_basename(trx_volume *volume)
 {
-    static char bname[PATH_MAX];
+    static char bname[1024];
+    int bname_size = 1024;
 
     DMSG("generating ree_basename for pobj");
 
-    if (!snprintf(bname, PATH_MAX, trx_pobj_ree_basename_fmt, volume->next_pobj_ree_basename_n))
+    if (!snprintf(bname, bname_size, trx_pobj_ree_basename_fmt, volume->next_pobj_ree_basename_n))
     {
         EMSG("failed calling function \'snprintf\'");
         return NULL;

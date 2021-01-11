@@ -3,7 +3,6 @@
 
 #include "trx.h"
 
-
 TEE_Result trx_handle_init(trx_handle *handle)
 {
     TEE_UUID uuid = TA_TRX_MANAGER_UUID;
@@ -116,7 +115,7 @@ TEE_Result trx_list(trx_handle handle, void *data, size_t *data_size)
                                   TEE_PARAM_TYPE_NONE, TEE_PARAM_TYPE_NONE);
 
     TEE_MemFill(params, 0, sizeof(params));
-    params[0].memref.buffer = (uint8_t *)data;
+    params[0].memref.buffer = (void *)data;
     params[0].memref.size = *data_size;
 
     res = TEE_InvokeTACommand(handle, TEE_TIMEOUT_INFINITE, TA_TRX_MANAGER_CMD_LIST, param_types, params, &origin);
@@ -125,7 +124,7 @@ TEE_Result trx_list(trx_handle handle, void *data, size_t *data_size)
         EMSG("TEE_InvokeTACommand failed with code 0x%x origin 0x%x", res, origin);
         return TEE_ERROR_GENERIC;
     }
-    *data_size = params[0].memref.size;
+    *data_size = (size_t)params[0].memref.size;
 
     return res;
 }

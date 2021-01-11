@@ -336,8 +336,6 @@ TEE_Result list(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
     size_t tmp_data_size;
 
     (void)&sess_ctx;
-    (void)&param_types;
-    (void)&params;
 
     DMSG("has been called");
 
@@ -345,6 +343,7 @@ TEE_Result list(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
                                       TEE_PARAM_TYPE_NONE, TEE_PARAM_TYPE_NONE);
     if (param_types != exp_param_types)
     {
+        EMSG("failed checking parameter types");
         return TEE_ERROR_BAD_PARAMETERS;
     }
 
@@ -359,7 +358,7 @@ TEE_Result list(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
     }
     uuid = &identity.uuid;
 
-    tmp_data_size = (size_t)*data_size;
+    tmp_data_size = (size_t)(*data_size);
     res = trx_volume_table_serialize_paths(volume_table, uuid, data, &tmp_data_size);
     *data_size = (uint32_t)tmp_data_size;
 
@@ -375,8 +374,6 @@ TEE_Result mount(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
     TEE_Result res;
 
     (void)&sess_ctx;
-    (void)&param_types;
-    (void)&params;
 
     DMSG("has been called");
 

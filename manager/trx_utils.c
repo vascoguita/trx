@@ -6,15 +6,9 @@
 
 #include "trx_utils.h"
 
-void clip_sub(size_t *result, int status, size_t *left, size_t n)
-{
-    *result += status;
-    *left = *result >= n ? 0 : n - *result;
-}
-
 char *basename(const char *path)
 {
-    static char bname[PATH_MAX];
+    static char bname[1024];
     size_t len;
     const char *endp, *startp;
 
@@ -56,7 +50,7 @@ char *basename(const char *path)
 
 char *dirname(const char *path)
 {
-    static char dname[PATH_MAX];
+    static char dname[1024];
     size_t len;
     const char *endp;
 
@@ -105,56 +99,13 @@ char *dirname(const char *path)
 
 char *path(const char *dirname, const char *basename)
 {
-    static char pname[PATH_MAX];
+    static char pname[1024];
+    int pname_size = 1024;
 
-    if (!snprintf(pname, PATH_MAX, "%s/%s", dirname, basename))
+    if (!snprintf(pname, pname_size, "%s/%s", dirname, basename))
     {
         return NULL;
     }
 
     return pname;    
-}
-
-int tee_uuid_snprint(char *s, size_t n, TEE_UUID *uuid)
-{
-    size_t result, left;
-    int status, i;
-
-    result = 0;
-
-    status = snprintf(s, n, "%x", uuid->timeLow);
-    if (status < 0)
-    {
-        return status;
-    }
-    clip_sub(&result, status, &left, n);
-    status = snprintf(s + result, left, "-%x", uuid->timeMid);
-    if (status < 0)
-    {
-        return status;
-    }
-    clip_sub(&result, status, &left, n);
-    status = snprintf(s + result, left, "-%x", uuid->timeHiAndVersion);
-    if (status < 0)
-    {
-        return status;
-    }
-    clip_sub(&result, status, &left, n);
-    for (i = 0; i < 8; i++)
-    {
-        if ((i == 0) || (i == 2))
-        {
-            status = snprintf(s + result, left, "-%x", uuid->clockSeqAndNode[i]);
-        }
-        else
-        {
-            status = snprintf(s + result, left, "%x", uuid->clockSeqAndNode[i]);
-        }
-        if (status < 0)
-        {
-            return status;
-        }
-        clip_sub(&result, status, &left, n);
-    }
-    return (int)result;
 }

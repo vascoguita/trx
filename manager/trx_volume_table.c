@@ -48,11 +48,12 @@ void trx_volume_table_clear(trx_volume_table *volume_table)
 
 char *trx_volume_table_gen_ree_dirname(trx_volume_table *volume_table)
 {
-    static char dname[PATH_MAX];
+    static char dname[1024];
+    int dname_size = 1024;
 
     DMSG("generating ree_dirname for volume");
 
-    if (!snprintf(dname, PATH_MAX, trx_volume_ree_dirname_fmt, volume_table->next_volume_ree_dirname_n))
+    if (!snprintf(dname, dname_size, trx_volume_ree_dirname_fmt, volume_table->next_volume_ree_dirname_n))
     {
         EMSG("failed calling function \'snprintf\'");
         return NULL;
