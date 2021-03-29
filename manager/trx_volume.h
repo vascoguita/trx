@@ -49,5 +49,7 @@ TEE_Result trx_volume_import(trx_volume *volume, char *S, size_t S_size);
 
 static const char trx_volume_ree_dirname_fmt[] = "volume_%lu.trx";
 static const char trx_volume_ree_basename[] = "table.trx";
+static const char trx_volume_id[] = "table";
+
 
 #endif //TRX_TRX_VOLUME_H

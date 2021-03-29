@@ -188,7 +188,7 @@ TEE_Result trx_pobj_save(trx_pobj *pobj)
     DMSG("saving pobj, version: %lu", pobj->version);
 
     res = trx_cipher_encrypt(pobj->tss->volume->vk, pobj->tss->uuid, pobj->data,
-                             pobj->data_size, pobj->version, NULL, &data_enc_size);
+                             pobj->data_size, pobj->version, pobj->id, pobj->id_size, NULL, &data_enc_size);
     if (res != TEE_ERROR_SHORT_BUFFER)
     {
         EMSG("failed calling function \'trx_cipher_encrypt\'");
@@ -207,7 +207,7 @@ TEE_Result trx_pobj_save(trx_pobj *pobj)
     data_enc = data + sizeof_size;
 
     res = trx_cipher_encrypt(pobj->tss->volume->vk, pobj->tss->uuid, pobj->data,
-                             pobj->data_size, pobj->version, data_enc, &data_enc_size);
+                             pobj->data_size, pobj->version, pobj->id, pobj->id_size, data_enc, &data_enc_size);
     if (res != TEE_SUCCESS)
     {
         EMSG("failed calling function \'trx_cipher_encrypt\'");
@@ -302,7 +302,7 @@ TEE_Result trx_pobj_load(trx_pobj *pobj)
     pobj->data_size = 0;
 
     res = trx_cipher_decrypt(pobj->tss->volume->vk, pobj->tss->uuid, data, data_size,
-                             &(pobj->version), pobj->data, &(pobj->data_size));
+                             &(pobj->version), pobj->id, pobj->id_size, pobj->data, &(pobj->data_size));
     if (res != TEE_ERROR_SHORT_BUFFER)
     {
         EMSG("failed calling function \'trx_cipher_decrypt\'");
@@ -316,7 +316,7 @@ TEE_Result trx_pobj_load(trx_pobj *pobj)
         goto out;
     }
     res = trx_cipher_decrypt(pobj->tss->volume->vk, pobj->tss->uuid, data, data_size,
-                             &(pobj->version), pobj->data, &(pobj->data_size));
+                             &(pobj->version), pobj->id, pobj->id_size, pobj->data, &(pobj->data_size));
     if (res != TEE_SUCCESS)
     {
         EMSG("failed calling function \'trx_cipher_decrypt\'");

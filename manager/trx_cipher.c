@@ -5,7 +5,7 @@
 #include "trx_cipher.h"
 
 TEE_Result trx_cipher_encrypt_data(trx_dek *dek, void *data, size_t data_size, unsigned long int new_version,
-                                   void *dst, size_t *dst_size)
+                                     void *id, size_t id_size, void *dst, size_t *dst_size)
 {
     TEE_Result res;
     uint8_t *nonce, *tag, *data_enc, *version;
@@ -53,6 +53,7 @@ TEE_Result trx_cipher_encrypt_data(trx_dek *dek, void *data, size_t data_size, u
 
     memcpy(version, &new_version, version_size);
     TEE_AEUpdateAAD(op_handle, version, version_size);
+    TEE_AEUpdateAAD(op_handle, id, id_size);
 
     tmp_data_enc_size = data_size;
     tmp_tag_size = tag_size;
@@ -71,13 +72,16 @@ out:
 }
 
 TEE_Result trx_cipher_decrypt_data(trx_dek *dek, void *src, size_t src_size, unsigned long int *last_version,
-                                   void *dst, size_t *dst_size)
+                                   void *id, size_t id_size, void *dst, size_t *dst_size)
 {
     TEE_Result res;
     uint8_t *nonce, *tag, *data_enc, *version;
     TEE_OperationHandle op_handle = TEE_HANDLE_NULL;
     uint32_t exp_dst_size, min_src_size;
     unsigned long int tmp_version;
+
+    (void)&id;
+    (void)&id_size;
 
     min_src_size = tag_size + nonce_size + version_size;
     if (src_size < min_src_size)
@@ -130,6 +134,7 @@ TEE_Result trx_cipher_decrypt_data(trx_dek *dek, void *src, size_t src_size, uns
     }
 
     TEE_AEUpdateAAD(op_handle, version, version_size);
+    TEE_AEUpdateAAD(op_handle, id, id_size);
 
     res = TEE_AEDecryptFinal(op_handle, data_enc, exp_dst_size, dst, &exp_dst_size, tag, tag_size);
     if ((res != TEE_SUCCESS) || (exp_dst_size != *dst_size))
@@ -259,7 +264,8 @@ out:
 }
 
 TEE_Result trx_cipher_encrypt(trx_vk *vk, TEE_UUID *uuid, void *src, size_t src_size,
-                              unsigned long int new_version, void *dst, size_t *dst_size)
+                              unsigned long int new_version, void *id, size_t id_size,
+                              void *dst, size_t *dst_size)
 {
     TEE_Result res;
     trx_tsk *tsk = NULL;
@@ -267,7 +273,7 @@ TEE_Result trx_cipher_encrypt(trx_vk *vk, TEE_UUID *uuid, void *src, size_t src_
     uint8_t *data_enc, *dek_enc;
     size_t data_enc_size, dek_enc_size, exp_dst_size;
 
-    res = trx_cipher_encrypt_data(NULL, src, src_size, new_version, NULL, &data_enc_size);
+    res = trx_cipher_encrypt_data(NULL, src, src_size, new_version, id, id_size, NULL, &data_enc_size);
     if (res != TEE_ERROR_SHORT_BUFFER)
     {
         res = TEE_ERROR_GENERIC;
@@ -309,7 +315,7 @@ TEE_Result trx_cipher_encrypt(trx_vk *vk, TEE_UUID *uuid, void *src, size_t src_
         goto out;
     }
 
-    res = trx_cipher_encrypt_data(dek, src, src_size, new_version, data_enc, &data_enc_size);
+    res = trx_cipher_encrypt_data(dek, src, src_size, new_version, id, id_size, data_enc, &data_enc_size);
     if (res != TEE_SUCCESS)
     {
         goto out;
@@ -339,7 +345,8 @@ out:
 }
 
 TEE_Result trx_cipher_decrypt(trx_vk *vk, TEE_UUID *uuid, void *src, size_t src_size,
-                              unsigned long int *last_version, void *dst, size_t *dst_size)
+                              unsigned long int *last_version, void *id, size_t id_size,
+                              void *dst, size_t *dst_size)
 {
     TEE_Result res;
     trx_dek *dek = NULL;
@@ -354,7 +361,7 @@ TEE_Result trx_cipher_decrypt(trx_vk *vk, TEE_UUID *uuid, void *src, size_t src_
         goto out;
     }
 
-    res = trx_cipher_encrypt_data(NULL, NULL, 0, 0, NULL, &data_enc_size);
+    res = trx_cipher_encrypt_data(NULL, NULL, 0, 0, NULL, 0, NULL, &data_enc_size);
     if (res != TEE_ERROR_SHORT_BUFFER)
     {
         res = TEE_ERROR_GENERIC;
@@ -372,7 +379,7 @@ TEE_Result trx_cipher_decrypt(trx_vk *vk, TEE_UUID *uuid, void *src, size_t src_
 
     data_enc_size = src_size - dek_enc_size;
 
-    res = trx_cipher_decrypt_data(NULL, data_enc, data_enc_size, last_version, NULL, &exp_dst_size);
+    res = trx_cipher_decrypt_data(NULL, data_enc, data_enc_size, last_version,  id, id_size, NULL, &exp_dst_size);
     if (res != TEE_ERROR_SHORT_BUFFER)
     {
         res = TEE_ERROR_GENERIC;
@@ -414,7 +421,7 @@ TEE_Result trx_cipher_decrypt(trx_vk *vk, TEE_UUID *uuid, void *src, size_t src_
         goto out;
     }
 
-    res = trx_cipher_decrypt_data(dek, data_enc, data_enc_size, last_version, dst, &exp_dst_size);
+    res = trx_cipher_decrypt_data(dek, data_enc, data_enc_size, last_version, id, id_size, dst, &exp_dst_size);
     if ((res != TEE_SUCCESS) || (exp_dst_size != *dst_size))
     {
         res = TEE_ERROR_GENERIC;

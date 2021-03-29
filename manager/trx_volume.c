@@ -323,7 +323,7 @@ TEE_Result trx_volume_save(trx_volume *volume)
     TEE_Result res;
     int fd;
     uint8_t *data_enc, sizeof_size, *data = NULL, *volume_data = NULL;
-    size_t data_size, data_enc_size, ree_path_size, volume_data_size;
+    size_t data_size, data_enc_size, ree_path_size, volume_data_size, id_size;
     char *ree_path;
     TEE_UUID uuid = TA_TRX_MANAGER_UUID;
 
@@ -351,8 +351,11 @@ TEE_Result trx_volume_save(trx_volume *volume)
         res = TEE_ERROR_GENERIC;
         goto out;
     }
+
+    id_size = strlen(trx_volume_id) + 1;
+
     res = trx_cipher_encrypt(volume->vk, &uuid, volume_data, volume_data_size,
-                             volume->version, NULL, &data_enc_size);
+                             volume->version, trx_volume_id, id_size, NULL, &data_enc_size);
     if (res != TEE_ERROR_SHORT_BUFFER)
     {
         EMSG("failed calling function \'trx_cipher_encrypt\'");
@@ -372,7 +375,7 @@ TEE_Result trx_volume_save(trx_volume *volume)
     data_enc = data + sizeof_size;
 
     res = trx_cipher_encrypt(volume->vk, &uuid, volume_data, volume_data_size,
-                             volume->version, data_enc, &data_enc_size);
+                             volume->version, trx_volume_id, id_size, data_enc, &data_enc_size);
     if (res != TEE_SUCCESS)
     {
         EMSG("failed calling function \'trx_cipher_encrypt\'");
@@ -417,7 +420,7 @@ TEE_Result trx_volume_load(trx_volume *volume)
     int fd;
     TEE_Result res;
     uint8_t *data = NULL, sizeof_size, *volume_data = NULL;
-    size_t data_size, ree_path_size, tmp_size, volume_data_size;
+    size_t data_size, ree_path_size, tmp_size, volume_data_size, id_size;
     char *ree_path;
     TEE_UUID uuid = TA_TRX_MANAGER_UUID;
 
@@ -465,7 +468,9 @@ TEE_Result trx_volume_load(trx_volume *volume)
         goto out;
     }
 
-    res = trx_cipher_decrypt(volume->vk, &uuid, data, data_size, &(volume->version), NULL, &volume_data_size);
+    id_size = strlen(trx_volume_id) + 1;
+
+    res = trx_cipher_decrypt(volume->vk, &uuid, data, data_size, &(volume->version), trx_volume_id, id_size, NULL, &volume_data_size);
     if (res != TEE_ERROR_SHORT_BUFFER)
     {
         EMSG("failed calling function \'trx_cipher_decrypt\'");
@@ -480,7 +485,7 @@ TEE_Result trx_volume_load(trx_volume *volume)
         goto out;
     }
 
-    res = trx_cipher_decrypt(volume->vk, &uuid, data, data_size, &(volume->version), volume_data, &volume_data_size);
+    res = trx_cipher_decrypt(volume->vk, &uuid, data, data_size, &(volume->version), trx_volume_id, id_size, volume_data, &volume_data_size);
     if (res != TEE_SUCCESS)
     {
         EMSG("failed calling function \'trx_cipher_decrypt\'");
