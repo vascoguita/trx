@@ -26,7 +26,6 @@ trx_pobj *trx_pobj_init(void)
     pobj->data = NULL;
     pobj->data_size = 0;
     pobj->version = 0;
-    pobj->isloaded = false;
 
     DMSG("initialized pobj");
 
@@ -37,15 +36,28 @@ void trx_pobj_clear(trx_pobj *pobj)
 {
     DMSG("clearing pobj");
 
-    if (pobj)
+    if (pobj != NULL)
     {
         free(pobj->id);
         free(pobj->ree_basename);
-        free(pobj->data);
+        trx_pobj_clear_data(pobj);
     }
     free(pobj);
 
     DMSG("cleared pobj");
+}
+
+void trx_pobj_clear_data(trx_pobj *pobj)
+{
+    DMSG("clearing pobj data");
+
+    if (pobj->data != NULL)
+    {
+        free(pobj->data);
+        pobj->data = NULL;
+    }
+
+    DMSG("cleared pobj data");
 }
 
 trx_pobj *trx_pobj_create(char *ree_basename, size_t ree_basename_size,
@@ -83,7 +95,6 @@ trx_pobj *trx_pobj_create(char *ree_basename, size_t ree_basename_size,
         trx_pobj_clear(pobj);
         return NULL;
     }
-    pobj->isloaded = true;
 
     DMSG("created pobj, ree_basename: \"%s\", ree_basename_size: %zu, id: \"%s\", id_size: %zu, data: \"%s\", data_size: %zu",
          pobj->ree_basename, pobj->ree_basename_size, pobj->id, pobj->id_size, (char *)(pobj->data), pobj->data_size);
@@ -94,7 +105,11 @@ TEE_Result trx_pobj_set_data(trx_pobj *pobj, void *data, size_t data_size)
 {
     DMSG("setting pobj data: \"%s\", data_size: %zu", (char *)data, data_size);
 
-    free(pobj->data);
+    if(pobj->data != NULL)
+    {
+        DMSG("DEBUG");
+    }
+    trx_pobj_clear_data(pobj);
     if (!(pobj->data = malloc(data_size)))
     {
         EMSG("failed calling function \'malloc\'");
@@ -298,17 +313,8 @@ TEE_Result trx_pobj_load(trx_pobj *pobj)
         goto out;
     }
 
-    free(pobj->data);
-    pobj->data_size = 0;
+    trx_pobj_clear_data(pobj);
 
-    res = trx_cipher_decrypt(pobj->tss->volume->vk, pobj->tss->uuid, data, data_size,
-                             &(pobj->version), pobj->id, pobj->id_size, pobj->data, &(pobj->data_size));
-    if (res != TEE_ERROR_SHORT_BUFFER)
-    {
-        EMSG("failed calling function \'trx_cipher_decrypt\'");
-        res = TEE_ERROR_GENERIC;
-        goto out;
-    }
     if (!(pobj->data = malloc(pobj->data_size)))
     {
         EMSG("failed calling function \'malloc\'");
@@ -323,7 +329,6 @@ TEE_Result trx_pobj_load(trx_pobj *pobj)
         res = TEE_ERROR_GENERIC;
         goto out;
     }
-    pobj->isloaded = true;
 
     DMSG("loaded pobj, version: %lu", pobj->version);
 
@@ -331,20 +336,4 @@ out:
     ree_fs_api_close(fd);
     free(data);
     return res;
-}
-
-bool trx_pobj_is_loaded(trx_pobj *pobj)
-{
-    DMSG("checking if pobj is loaded");
-
-    if (pobj->isloaded)
-    {
-        DMSG("pobj is loaded");
-    }
-    else
-    {
-        DMSG("pobj is not loaded");
-    }
-
-    return pobj->isloaded;
 }

@@ -196,9 +196,11 @@ TEE_Result write(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
     res = trx_pobj_save(pobj);
     if (res != TEE_SUCCESS)
     {
+        trx_pobj_clear_data(pobj);
         EMSG("failed calling function \'trx_pobj_save\'");
         return TEE_ERROR_GENERIC;
     }
+    trx_pobj_clear_data(pobj);
     res = trx_volume_save(volume);
     if (res != TEE_SUCCESS)
     {
@@ -309,16 +311,17 @@ TEE_Result read(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
     }
 
     DMSG("reading pobj");
-    if (!trx_pobj_is_loaded(pobj))
+    res = trx_pobj_load(pobj);
+    if (res != TEE_SUCCESS)
     {
-        res = trx_pobj_load(pobj);
-        if (res != TEE_SUCCESS)
-        {
-            EMSG("failed calling function \'trx_pobj_load\'");
-            return TEE_ERROR_GENERIC;
-        }
+        EMSG("failed calling function \'trx_pobj_load\'");
+        return TEE_ERROR_GENERIC;
     }
+
+    DMSG("Copying pobj data to \"data\" buffer");
     memcpy(data, pobj->data, (size_t)*data_size);
+
+    trx_pobj_clear_data(pobj);
 
     DMSG("read pobj data: \"%s\" with data_size: %zu from path: \"%s\" with path_size: %zu",
          (char *)data, (size_t)*data_size, (char *)path, path_size);

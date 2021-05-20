@@ -17,11 +17,11 @@ typedef struct _trx_pobj
     void *data;
     size_t data_size;
     unsigned long int version;
-    bool isloaded;
 } trx_pobj;
 
 trx_pobj *trx_pobj_init(void);
 void trx_pobj_clear(trx_pobj *pobj);
+void trx_pobj_clear_data(trx_pobj *pobj);
 
 trx_pobj *trx_pobj_create(char *ree_basename, size_t ree_basename_size,
                           char *id, size_t id_size, void *data, size_t data_size);
@@ -34,8 +34,6 @@ TEE_Result trx_pobj_set_data_size(trx_pobj *pobj, size_t data_size);
 
 TEE_Result trx_pobj_save(trx_pobj *pobj);
 TEE_Result trx_pobj_load(trx_pobj *pobj);
-
-bool trx_pobj_is_loaded(trx_pobj *pobj);
 
 int trx_pobj_snprint(char *s, size_t n, trx_pobj *pobj);
 int trx_pobj_set_str(char *s, size_t n, trx_pobj *pobj);
