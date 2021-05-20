@@ -322,7 +322,7 @@ TEE_Result trx_pobj_load(trx_pobj *pobj)
         goto out;
     }
     res = trx_cipher_decrypt(pobj->tss->volume->vk, pobj->tss->uuid, data, data_size,
-                             &(pobj->version), pobj->id, pobj->id_size, pobj->data, &(pobj->data_size));
+                                pobj->version, pobj->id, pobj->id_size, pobj->data, &(pobj->data_size));
     if (res != TEE_SUCCESS)
     {
         EMSG("failed calling function \'trx_cipher_decrypt\'");
