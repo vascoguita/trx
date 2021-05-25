@@ -17,6 +17,7 @@ TEE_Result trx_read(trx_handle handle, const char *path, size_t path_size, void 
 TEE_Result trx_list(trx_handle handle, void *data, size_t *data_size);
 TEE_Result trx_mount(trx_handle handle, const unsigned char *S, size_t S_size,
                      const char *ree_dirname, size_t ree_dirname_size, const char *mount_point, size_t mount_point_size);
-TEE_Result trx_share(trx_handle handle, const unsigned char *R, size_t R_size, const char *mount_point, size_t mount_point_size);
+TEE_Result trx_share(trx_handle handle, const unsigned char *R, size_t R_size, const char *mount_point,
+                     size_t mount_point_size, const char *label, size_t label_size);
 
 #endif //TRX_H

@@ -302,6 +302,8 @@ TEE_Result trx_volume_table_serialize(trx_volume_table *volume_table, void *data
         exp_dst_size += e->volume->mount_point_size;
         exp_dst_size += sizeof(size_t);
         exp_dst_size += e->volume->ree_dirname_size;
+        exp_dst_size += sizeof(size_t);
+        exp_dst_size += e->volume->udid_size;
         exp_dst_size += trx_vk_size;
         exp_dst_size += sizeof(long unsigned int);
     }
@@ -334,6 +336,10 @@ TEE_Result trx_volume_table_serialize(trx_volume_table *volume_table, void *data
         cpy_ptr += sizeof(size_t);
         memcpy(cpy_ptr, e->volume->ree_dirname, e->volume->ree_dirname_size);
         cpy_ptr += e->volume->ree_dirname_size;
+        memcpy(cpy_ptr, &(e->volume->udid_size), sizeof(size_t));
+        cpy_ptr += sizeof(size_t);
+        memcpy(cpy_ptr, e->volume->udid, e->volume->udid_size);
+        cpy_ptr += e->volume->udid_size;
         tmp_size = trx_vk_size;
         res = trx_vk_to_bytes(e->volume->vk, cpy_ptr, &tmp_size);
         if (res != TEE_SUCCESS)
@@ -438,6 +444,28 @@ TEE_Result trx_volume_table_deserialize(trx_volume_table *volume_table, void *da
         memcpy(volume->ree_dirname, cpy_ptr, volume->ree_dirname_size);
         cpy_ptr += volume->ree_dirname_size;
         left -= volume->ree_dirname_size;
+
+        if (left < sizeof(size_t))
+        {
+            EMSG("failed checking size of \"data\" buffer");
+            return TEE_ERROR_GENERIC;
+        }
+        memcpy(&(volume->udid_size), cpy_ptr, sizeof(size_t));
+        cpy_ptr += sizeof(size_t);
+        left -= sizeof(size_t);
+        if (left < volume->udid_size)
+        {
+            EMSG("failed checking size of \"data\" buffer");
+            return TEE_ERROR_GENERIC;
+        }
+        if (!(volume->udid = malloc(volume->udid_size)))
+        {
+            EMSG("failed calling function \'malloc\'");
+            return TEE_ERROR_GENERIC;
+        }
+        memcpy(volume->udid, cpy_ptr, volume->udid_size);
+        cpy_ptr += volume->udid_size;
+        left -= volume->udid_size;
         if (left < trx_vk_size)
         {
             EMSG("failed checking size of \"data\" buffer");

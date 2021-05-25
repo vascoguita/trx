@@ -8,6 +8,27 @@ TEE_Result TA_CreateEntryPoint(void)
 
     DMSG("has been called");
 
+    setup_is_completed = false;
+
+    if(trx_ibme_exists())
+    {
+        if(!(ibme = trx_ibme_init()))
+        {
+            EMSG("failed calling function \'trx_ibme_init\'");
+            return TEE_ERROR_GENERIC;
+        }
+
+        res = trx_ibme_load(ibme);
+        if(res != TEE_SUCCESS)
+        {
+            EMSG("failed calling function \'trx_ibme_load\'");
+            trx_ibme_clear(ibme);
+            return TEE_ERROR_GENERIC;
+        }
+
+        setup_is_completed = true;
+    }
+
     if(!(volume_table = trx_volume_table_init()))
     {
         EMSG("failed calling function \'trx_volume_table_init\'");
@@ -31,6 +52,7 @@ void TA_DestroyEntryPoint(void)
 {
     DMSG("has been called");
     
+    trx_ibme_clear(ibme);
     trx_volume_table_clear(volume_table);
 }
 
@@ -77,35 +99,35 @@ TEE_Result TA_InvokeCommandEntryPoint(void *sess_ctx, uint32_t cmd, uint32_t par
     case TA_TRX_MANAGER_CMD_SETUP:
         return setup(sess_ctx, param_types, params);
     case TA_TRX_MANAGER_CMD_WRITE:
-        if (identity.login != TEE_LOGIN_TRUSTED_APP)
+        if ((identity.login != TEE_LOGIN_TRUSTED_APP) && setup_is_completed)
         {
             EMSG("Access Denied: Only TAs are allowed to use TRX");
             return TEE_ERROR_GENERIC;
         }
         return write(sess_ctx, param_types, params);
     case TA_TRX_MANAGER_CMD_READ:
-        if (identity.login != TEE_LOGIN_TRUSTED_APP)
+        if ((identity.login != TEE_LOGIN_TRUSTED_APP) && setup_is_completed)
         {
             EMSG("Access Denied: Only TAs are allowed to use TRX");
             return TEE_ERROR_GENERIC;
         }
         return read(sess_ctx, param_types, params);
     case TA_TRX_MANAGER_CMD_LIST:
-        if (identity.login != TEE_LOGIN_TRUSTED_APP)
+        if ((identity.login != TEE_LOGIN_TRUSTED_APP) && setup_is_completed)
         {
             EMSG("Access Denied: Only TAs are allowed to use TRX");
             return TEE_ERROR_GENERIC;
         }
         return list(sess_ctx, param_types, params);
     case TA_TRX_MANAGER_CMD_MOUNT:
-        if (identity.login != TEE_LOGIN_TRUSTED_APP)
+        if ((identity.login != TEE_LOGIN_TRUSTED_APP) && setup_is_completed)
         {
             EMSG("Access Denied: Only TAs are allowed to use TRX");
             return TEE_ERROR_GENERIC;
         }
         return mount(sess_ctx, param_types, params);
     case TA_TRX_MANAGER_CMD_SHARE:
-        if (identity.login != TEE_LOGIN_TRUSTED_APP)
+        if ((identity.login != TEE_LOGIN_TRUSTED_APP) && setup_is_completed)
         {
             EMSG("Access Denied: Only TAs are allowed to use TRX");
             return TEE_ERROR_GENERIC;

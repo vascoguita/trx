@@ -140,6 +140,8 @@ TEE_Result trx_tss_serialize(trx_tss *tss, void *data, size_t *data_size)
         exp_dst_size += sizeof(size_t);
         exp_dst_size += e->pobj->id_size;
         exp_dst_size += sizeof(size_t);
+        exp_dst_size += e->pobj->udid_size;
+        exp_dst_size += sizeof(size_t);
         exp_dst_size += e->pobj->ree_basename_size;
         exp_dst_size += sizeof(long unsigned int);
         exp_dst_size += sizeof(size_t);
@@ -167,6 +169,10 @@ TEE_Result trx_tss_serialize(trx_tss *tss, void *data, size_t *data_size)
         cpy_ptr += sizeof(size_t);
         memcpy(cpy_ptr, e->pobj->id, e->pobj->id_size);
         cpy_ptr += e->pobj->id_size;
+        memcpy(cpy_ptr, &(e->pobj->udid_size), sizeof(size_t));
+        cpy_ptr += sizeof(size_t);
+        memcpy(cpy_ptr, e->pobj->udid, e->pobj->udid_size);
+        cpy_ptr += e->pobj->udid_size;
         memcpy(cpy_ptr, &(e->pobj->ree_basename_size), sizeof(size_t));
         cpy_ptr += sizeof(size_t);
         memcpy(cpy_ptr, e->pobj->ree_basename, e->pobj->ree_basename_size);
@@ -244,6 +250,28 @@ TEE_Result trx_tss_deserialize(trx_tss *tss, void *data, size_t data_size)
         if (res != TEE_SUCCESS)
         {
             EMSG("failed calling function \'trx_pobj_set_id\'");
+            return TEE_ERROR_GENERIC;
+        }
+        cpy_ptr += tmp_size;
+        left -= tmp_size;
+        if (left < sizeof(size_t))
+        {
+            EMSG("failed checking size of \"data\" buffer");
+            return TEE_ERROR_GENERIC;
+        }
+        memcpy(&tmp_size, cpy_ptr, sizeof(size_t));
+        cpy_ptr += sizeof(size_t);
+        left -= sizeof(size_t);
+
+        if (left < tmp_size)
+        {
+            EMSG("failed checking size of \"data\" buffer");
+            return TEE_ERROR_GENERIC;
+        }
+        res = trx_pobj_set_udid(pobj, cpy_ptr, tmp_size);
+        if (res != TEE_SUCCESS)
+        {
+            EMSG("failed calling function \'trx_pobj_set_udid\'");
             return TEE_ERROR_GENERIC;
         }
         cpy_ptr += tmp_size;

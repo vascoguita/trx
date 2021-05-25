@@ -261,8 +261,8 @@ out:
 TEE_Result share(trx_handle handle)
 {
     TEE_Result res;
-    char input[100], *id = NULL, *mount_point = NULL;
-    size_t input_size, id_size, mount_point_size;
+    char input[100], *id = NULL, *mount_point = NULL, *label = NULL;
+    size_t input_size, id_size, mount_point_size, label_size;
 
     input_size = 100;
 
@@ -284,7 +284,16 @@ TEE_Result share(trx_handle handle)
     }
     id = strdup(input);
     id_size = strlen(id) + 1;
-    res = trx_share(handle, (unsigned char *)id, id_size, mount_point, mount_point_size);
+    res = TUI->input("Enter label: ", input, input_size);
+    if (res != TEE_SUCCESS)
+    {
+        EMSG("Failed to input with code 0x%x", res);
+        res = TEE_ERROR_GENERIC;
+        goto out;
+    }
+    label = strdup(input);
+    label_size = strlen(id) + 1;
+    res = trx_share(handle, (unsigned char *)id, id_size, mount_point, mount_point_size, label, label_size);
     if (res != TEE_SUCCESS)
     {
         DMSG("trx_share failed with code 0x%x", res);
@@ -295,6 +304,7 @@ TEE_Result share(trx_handle handle)
 out:
     free(mount_point);
     free(id);
+    free(label);
     return res;
 }
 

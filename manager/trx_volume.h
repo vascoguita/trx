@@ -25,6 +25,10 @@ typedef struct _trx_volume
     size_t mount_point_size;
     char *ree_dirname;
     size_t ree_dirname_size;
+    void *udid;
+    size_t udid_size;
+    char *label;
+    size_t label_size;
     unsigned long int version;
     trx_vk *vk;
     bool isloaded;
@@ -32,7 +36,10 @@ typedef struct _trx_volume
 
 trx_volume *trx_volume_init(void);
 void trx_volume_clear(trx_volume *volume);
-trx_volume *trx_volume_create(char *mount_point, size_t mount_point_size, char *ree_dirname, size_t ree_dirname_size);
+trx_volume *trx_volume_create(char *mount_point, size_t mount_point_size, char *ree_dirname, size_t ree_dirname_size,
+                              void *udid, size_t udid_size);
+TEE_Result trx_volume_set_udid(trx_volume *volume, void *udid, size_t udid_size);
+TEE_Result trx_volume_set_label(trx_volume *volume, char *label, size_t label_size);
 TEE_Result trx_volume_add(trx_volume *volume, struct _trx_tss *tss);
 struct _trx_tss *trx_volume_get(trx_volume *volume, TEE_UUID *uuid);
 TEE_Result trx_volume_serialize(trx_volume *volume, void *data, size_t *data_size);
@@ -44,12 +51,13 @@ TEE_Result trx_volume_load(trx_volume *volume);
 
 bool trx_volume_is_loaded(trx_volume *volume);
 
+TEE_Result trx_volume_share_serialize(trx_volume *volume, void *data, size_t *data_size);
+TEE_Result trx_volume_share_deserialize(trx_volume *volume, void *data, size_t data_size);
 TEE_Result trx_volume_share(trx_volume *volume, char *R, size_t R_size);
 TEE_Result trx_volume_import(trx_volume *volume, char *S, size_t S_size);
 
 static const char trx_volume_ree_dirname_fmt[] = "volume_%lu.trx";
 static const char trx_volume_ree_basename[] = "table.trx";
 static const char trx_volume_id[] = "table";
-
 
 #endif //TRX_TRX_VOLUME_H

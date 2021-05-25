@@ -10,6 +10,13 @@ int trx_setup(TEEC_Session *sess,
               char *param_str, size_t param_str_size,
               char *mpk_str, size_t mpk_str_size,
               char *ek_str, size_t ek_str_size,
-              char *dk_str, size_t dk_str_size);
+              char *dk_str, size_t dk_str_size,
+              char *udid, size_t udid_size);
+int serialize(char *param_str, size_t param_str_size,
+              char *mpk_str, size_t mpk_str_size,
+              char *ek_str, size_t ek_str_size,
+              char *dk_str, size_t dk_str_size,
+              char *udid, size_t udid_size,
+              void *data, size_t *data_size);
 
 #endif

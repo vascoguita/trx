@@ -232,5 +232,10 @@ int ta_gen(char *id) {
     DK_clear(dk);
     MKP_clear(mkp);
     pairing_clear(pairing);
+
+    fp = fopen("udid.ibme", "w");
+    fwrite(id, 1, strlen(id) + 1, fp);
+    fclose(fp);
+
     return 0;
 }

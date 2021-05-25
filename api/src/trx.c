@@ -157,20 +157,22 @@ TEE_Result trx_mount(trx_handle handle, const unsigned char *S, size_t S_size, c
     return res;
 }
 
-TEE_Result trx_share(trx_handle handle, const unsigned char *R, size_t R_size, const char *mount_point, size_t mount_point_size)
+TEE_Result trx_share(trx_handle handle, const unsigned char *R, size_t R_size, const char *mount_point, size_t mount_point_size, const char *label, size_t label_size)
 {
     TEE_Result res;
     uint32_t param_types, origin;
     TEE_Param params[4];
 
     param_types = TEE_PARAM_TYPES(TEE_PARAM_TYPE_MEMREF_INPUT, TEE_PARAM_TYPE_MEMREF_INPUT,
-                                  TEE_PARAM_TYPE_NONE, TEE_PARAM_TYPE_NONE);
+                                  TEE_PARAM_TYPE_MEMREF_INPUT, TEE_PARAM_TYPE_NONE);
 
     TEE_MemFill(params, 0, sizeof(params));
     params[0].memref.buffer = (unsigned char *)R;
     params[0].memref.size = R_size;
     params[1].memref.buffer = (char *)mount_point;
     params[1].memref.size = mount_point_size;
+    params[2].memref.buffer = (char *)label;
+    params[2].memref.size = label_size;
 
     res = TEE_InvokeTACommand(handle, TEE_TIMEOUT_INFINITE, TA_TRX_MANAGER_CMD_SHARE, param_types, params, &origin);
     if (res != TEE_SUCCESS)

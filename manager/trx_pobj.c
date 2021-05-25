@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <tee_internal_api.h>
+#include "trx_manager_private.h"
 #include <ree_fs_api.h>
 #include "trx_volume.h"
 #include "trx_cipher.h"
@@ -26,6 +27,8 @@ trx_pobj *trx_pobj_init(void)
     pobj->data = NULL;
     pobj->data_size = 0;
     pobj->version = 0;
+    pobj->udid = NULL;
+    pobj->udid_size = 0;
 
     DMSG("initialized pobj");
 
@@ -40,6 +43,7 @@ void trx_pobj_clear(trx_pobj *pobj)
     {
         free(pobj->id);
         free(pobj->ree_basename);
+        free(pobj->udid);
         trx_pobj_clear_data(pobj);
     }
     free(pobj);
@@ -61,13 +65,16 @@ void trx_pobj_clear_data(trx_pobj *pobj)
 }
 
 trx_pobj *trx_pobj_create(char *ree_basename, size_t ree_basename_size,
-                          char *id, size_t id_size, void *data, size_t data_size)
+                          char *id, size_t id_size,
+                          void *udid, size_t udid_size,
+                          void *data, size_t data_size)
 {
     trx_pobj *pobj;
     TEE_Result res;
 
-    DMSG("creating pobj, ree_basename: \"%s\", ree_basename_size: %zu, id: \"%s\", id_size: %zu, data: \"%s\", data_size: %zu",
-         ree_basename, ree_basename_size, id, id_size, (char *)data, data_size);
+    DMSG("creating pobj, ree_basename: \"%s\", ree_basename_size: %zu, id: \"%s\", id_size: %zu, udid: \"%s\", "
+         "udid_size: %zu, data: \"%s\", data_size: %zu",
+         ree_basename, ree_basename_size, id, id_size, (char *)udid, udid_size, (char *)data, data_size);
 
     if (!(pobj = trx_pobj_init()))
     {
@@ -88,6 +95,13 @@ trx_pobj *trx_pobj_create(char *ree_basename, size_t ree_basename_size,
         trx_pobj_clear(pobj);
         return NULL;
     }
+    res = trx_pobj_set_udid(pobj, udid, udid_size);
+    if (res != TEE_SUCCESS)
+    {
+        EMSG("failed calling function \'trx_pobj_set_udid\'");
+        trx_pobj_clear(pobj);
+        return NULL;
+    }
     res = trx_pobj_set_data(pobj, data, data_size);
     if (res != TEE_SUCCESS)
     {
@@ -96,8 +110,10 @@ trx_pobj *trx_pobj_create(char *ree_basename, size_t ree_basename_size,
         return NULL;
     }
 
-    DMSG("created pobj, ree_basename: \"%s\", ree_basename_size: %zu, id: \"%s\", id_size: %zu, data: \"%s\", data_size: %zu",
-         pobj->ree_basename, pobj->ree_basename_size, pobj->id, pobj->id_size, (char *)(pobj->data), pobj->data_size);
+    DMSG("created pobj, ree_basename: \"%s\", ree_basename_size: %zu, id: \"%s\", id_size: %zu, udid: \"%s\","
+         "udid_size: %zu, data: \"%s\", data_size: %zu",
+         pobj->ree_basename, pobj->ree_basename_size, pobj->id, pobj->id_size, (char *)(pobj->udid),
+         pobj->udid_size, (char *)(pobj->data), pobj->data_size);
     return pobj;
 }
 
@@ -105,10 +121,6 @@ TEE_Result trx_pobj_set_data(trx_pobj *pobj, void *data, size_t data_size)
 {
     DMSG("setting pobj data: \"%s\", data_size: %zu", (char *)data, data_size);
 
-    if(pobj->data != NULL)
-    {
-        DMSG("DEBUG");
-    }
     trx_pobj_clear_data(pobj);
     if (!(pobj->data = malloc(data_size)))
     {
@@ -129,6 +141,23 @@ TEE_Result trx_pobj_set_data_size(trx_pobj *pobj, size_t data_size)
     pobj->data_size = data_size;
 
     DMSG("set pobj data_size: %zu", pobj->data_size);
+    return TEE_SUCCESS;
+}
+
+TEE_Result trx_pobj_set_udid(trx_pobj *pobj, void *udid, size_t udid_size)
+{
+    DMSG("setting pobj udid: \"%s\", udid_size: %zu", (char *)udid, udid_size);
+
+    free(pobj->udid);
+    if (!(pobj->udid = malloc(udid_size)))
+    {
+        EMSG("failed calling function \'malloc\'");
+        return TEE_ERROR_GENERIC;
+    }
+    pobj->udid_size = udid_size;
+    memcpy(pobj->udid, udid, udid_size);
+
+    DMSG("set pobj udid: \"%s\", udid_size: %zu", (char *)(pobj->udid), pobj->udid_size);
     return TEE_SUCCESS;
 }
 
@@ -200,10 +229,32 @@ TEE_Result trx_pobj_save(trx_pobj *pobj)
 
     pobj->version++;
 
-    DMSG("saving pobj, version: %lu", pobj->version);
+    if (pobj->udid_size != ibme->udid_size)
+    {
+        res = trx_pobj_set_udid(pobj, ibme->udid, ibme->udid_size);
+        if (res != TEE_SUCCESS)
+        {
+            EMSG("failed calling function \'trx_pobj_set_udid\'");
+            res = TEE_ERROR_GENERIC;
+            goto out;
+        }
+    }
+    else if (memcmp(pobj->udid, ibme->udid, ibme->udid_size))
+    {
+        res = trx_pobj_set_udid(pobj, ibme->udid, ibme->udid_size);
+        if (res != TEE_SUCCESS)
+        {
+            EMSG("failed calling function \'trx_pobj_set_udid\'");
+            res = TEE_ERROR_GENERIC;
+            goto out;
+        }
+    }
+
+    DMSG("saving pobj, version: %lu, udid: %s, udid_size: %zu", pobj->version, (char *)pobj->udid, pobj->udid_size);
 
     res = trx_cipher_encrypt(pobj->tss->volume->vk, pobj->tss->uuid, pobj->data,
-                             pobj->data_size, pobj->version, pobj->id, pobj->id_size, NULL, &data_enc_size);
+                             pobj->data_size, pobj->version, pobj->id, pobj->id_size,
+                             pobj->udid, pobj->udid_size, NULL, &data_enc_size);
     if (res != TEE_ERROR_SHORT_BUFFER)
     {
         EMSG("failed calling function \'trx_cipher_encrypt\'");
@@ -222,7 +273,8 @@ TEE_Result trx_pobj_save(trx_pobj *pobj)
     data_enc = data + sizeof_size;
 
     res = trx_cipher_encrypt(pobj->tss->volume->vk, pobj->tss->uuid, pobj->data,
-                             pobj->data_size, pobj->version, pobj->id, pobj->id_size, data_enc, &data_enc_size);
+                             pobj->data_size, pobj->version, pobj->id, pobj->id_size,
+                             pobj->udid, pobj->udid_size, data_enc, &data_enc_size);
     if (res != TEE_SUCCESS)
     {
         EMSG("failed calling function \'trx_cipher_encrypt\'");
@@ -322,7 +374,8 @@ TEE_Result trx_pobj_load(trx_pobj *pobj)
         goto out;
     }
     res = trx_cipher_decrypt(pobj->tss->volume->vk, pobj->tss->uuid, data, data_size,
-                                pobj->version, pobj->id, pobj->id_size, pobj->data, &(pobj->data_size));
+                             pobj->version, pobj->id, pobj->id_size,
+                             pobj->udid, pobj->udid_size, pobj->data, &(pobj->data_size));
     if (res != TEE_SUCCESS)
     {
         EMSG("failed calling function \'trx_cipher_decrypt\'");

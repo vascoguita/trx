@@ -52,16 +52,18 @@ bool trx_authorization_authorize(const char *fmt, ...)
     return true;
 }
 
-bool trx_authorization_share(const char *mount_point, const char *R)
+bool trx_authorization_share(const char *mount_point, const char *R, const unsigned long int version, const char *label)
 {
     return trx_authorization_authorize("Authorize Secure Storage Volume mounted on \"%s\""
+                                       " with version %lu and label \"%s\""
                                        " to be shared with \"%s\"? [y\\n] ",
-                                       mount_point, R);
+                                       mount_point, version, label, R);
 }
 
-bool trx_authorization_mount(const char *mount_point, const char *S)
+bool trx_authorization_mount(const char *mount_point, const char *S, const unsigned long int version, const char *label)
 {
     return trx_authorization_authorize("Authorize Secure Storage Volume from \"%s\""
+                                       " with version %lu and label \"%s\""
                                        " to be mounted on \"%s\"? [y\\n] ",
-                                       S, mount_point);
+                                       S, version, label, mount_point);
 }
