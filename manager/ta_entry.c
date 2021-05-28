@@ -32,6 +32,7 @@ TEE_Result TA_CreateEntryPoint(void)
     if(!(volume_table = trx_volume_table_init()))
     {
         EMSG("failed calling function \'trx_volume_table_init\'");
+        trx_ibme_clear(ibme);
         return TEE_ERROR_GENERIC;
     }
     
@@ -42,9 +43,20 @@ TEE_Result TA_CreateEntryPoint(void)
         {
             EMSG("failed calling function \'trx_volume_table_load\'");
             trx_volume_table_clear(volume_table);
+            trx_ibme_clear(ibme);
+            return TEE_ERROR_GENERIC;
+        }
+
+        res = trx_volume_table_load_volumes(volume_table);
+        if(res != TEE_SUCCESS)
+        {
+            EMSG("failed calling function \'trx_volume_table_load_volumes\'");
+            trx_volume_table_clear(volume_table);
+            trx_ibme_clear(ibme);
             return TEE_ERROR_GENERIC;
         }
     }
+
     return TEE_SUCCESS;
 }
 

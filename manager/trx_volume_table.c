@@ -236,6 +236,31 @@ out:
     return res;
 }
 
+TEE_Result trx_volume_table_load_volumes(trx_volume_table *volume_table)
+{
+    volume_entry *e;
+    TEE_Result res;
+
+    DMSG("loading volumes to volume_table");
+
+    SLIST_FOREACH(e, &(volume_table->h), _volume_entries)
+    {
+        if (!trx_volume_is_loaded(e->volume))
+        {
+            res = trx_volume_load(e->volume);
+            if (res != TEE_SUCCESS)
+            {
+                EMSG("failed calling function \'trx_volume_load\'");
+                return TEE_ERROR_GENERIC;
+            }
+        }
+    }
+
+    DMSG("loaded volumes to volume_table");
+
+    return TEE_SUCCESS;
+}
+
 bool trx_volume_table_exists(void)
 {
     uint8_t *id = NULL;

@@ -126,15 +126,6 @@ TEE_Result write(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
             return TEE_ERROR_GENERIC;
         }
     }
-    if (!trx_volume_is_loaded(volume))
-    {
-        res = trx_volume_load(volume);
-        if (res != TEE_SUCCESS)
-        {
-            EMSG("failed calling function \'trx_volume_load\'");
-            return TEE_ERROR_GENERIC;
-        }
-    }
     res = TEE_GetPropertyAsIdentity(TEE_PROPSET_CURRENT_CLIENT, "gpd.client.identity", &identity);
     if (res != TEE_SUCCESS)
     {
@@ -265,15 +256,6 @@ TEE_Result read(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
     {
         EMSG("failed calling function \'trx_volume_table_get\'");
         return TEE_ERROR_GENERIC;
-    }
-    if (!trx_volume_is_loaded(volume))
-    {
-        res = trx_volume_load(volume);
-        if (res != TEE_SUCCESS)
-        {
-            EMSG("failed calling function \'trx_volume_load\'");
-            return TEE_ERROR_GENERIC;
-        }
     }
     res = TEE_GetPropertyAsIdentity(TEE_PROPSET_CURRENT_CLIENT, "gpd.client.identity", &identity);
     if (res != TEE_SUCCESS)
@@ -442,6 +424,13 @@ TEE_Result mount(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
     {
         EMSG("failed calling function \'trx_volume_table_add\'");
         trx_volume_clear(volume);
+        return TEE_ERROR_GENERIC;
+    }
+
+    res = trx_volume_load(volume);
+    if (res != TEE_SUCCESS)
+    {
+        EMSG("failed calling function \'trx_volume_load\'");
         return TEE_ERROR_GENERIC;
     }
 
