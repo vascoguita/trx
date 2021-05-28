@@ -18,39 +18,6 @@ void trx_handle_clear(trx_handle handle)
     TEE_CloseTASession(handle);
 }
 
-TEE_Result trx_setup(trx_handle handle,
-                     const char *param_str, size_t param_str_size,
-                     const char *mpk_str, size_t mpk_str_size,
-                     const char *ek_str, size_t ek_str_size,
-                     const char *dk_str, size_t dk_str_size)
-{
-    TEE_Result res;
-    uint32_t param_types, origin;
-    TEE_Param params[4];
-
-    param_types = TEE_PARAM_TYPES(TEE_PARAM_TYPE_MEMREF_INPUT, TEE_PARAM_TYPE_MEMREF_INPUT,
-                                  TEE_PARAM_TYPE_MEMREF_INPUT, TEE_PARAM_TYPE_MEMREF_INPUT);
-
-    TEE_MemFill(params, 0, sizeof(params));
-    params[0].memref.buffer = (char *)param_str;
-    params[0].memref.size = param_str_size;
-    params[1].memref.buffer = (char *)mpk_str;
-    params[1].memref.size = mpk_str_size;
-    params[2].memref.buffer = (char *)ek_str;
-    params[2].memref.size = ek_str_size;
-    params[3].memref.buffer = (char *)dk_str;
-    params[3].memref.size = dk_str_size;
-
-    res = TEE_InvokeTACommand(handle, TEE_TIMEOUT_INFINITE, TA_TRX_MANAGER_CMD_SETUP, param_types, params, &origin);
-    if (res != TEE_SUCCESS)
-    {
-        EMSG("TEE_InvokeTACommand failed with code 0x%x origin 0x%x", res, origin);
-        return TEE_ERROR_GENERIC;
-    }
-
-    return res;
-}
-
 TEE_Result trx_write(trx_handle handle, const char *path, size_t path_size, const void *data, size_t data_size)
 {
     TEE_Result res;
@@ -104,7 +71,8 @@ TEE_Result trx_read(trx_handle handle, const char *path, size_t path_size,
     return res;
 }
 
-TEE_Result trx_list(trx_handle handle, void *data, size_t *data_size)
+
+/*TEE_Result trx_list(trx_handle handle, void *data, size_t *data_size)
 {
     TEE_Result res;
 
@@ -127,7 +95,7 @@ TEE_Result trx_list(trx_handle handle, void *data, size_t *data_size)
     *data_size = (size_t)params[0].memref.size;
 
     return res;
-}
+}*/
 
 TEE_Result trx_mount(trx_handle handle, const unsigned char *S, size_t S_size, const char *ree_dirname, size_t ree_dirname_size,
                      const char *mount_point, size_t mount_point_size)

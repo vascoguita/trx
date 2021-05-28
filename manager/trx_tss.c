@@ -145,6 +145,7 @@ TEE_Result trx_tss_serialize(trx_tss *tss, void *data, size_t *data_size)
         exp_dst_size += e->pobj->ree_basename_size;
         exp_dst_size += sizeof(long unsigned int);
         exp_dst_size += sizeof(size_t);
+        exp_dst_size += sizeof(size_t);
     }
     exp_dst_size += sizeof(TEE_UUID);
 
@@ -180,6 +181,8 @@ TEE_Result trx_tss_serialize(trx_tss *tss, void *data, size_t *data_size)
         memcpy(cpy_ptr, &(e->pobj->version), sizeof(long unsigned int));
         cpy_ptr += sizeof(long unsigned int);
         memcpy(cpy_ptr, &(e->pobj->data_size), sizeof(size_t));
+        cpy_ptr += sizeof(size_t);
+        memcpy(cpy_ptr, &(e->pobj->file_size), sizeof(size_t));
         cpy_ptr += sizeof(size_t);
     }
     memcpy(cpy_ptr, tss->uuid, sizeof(TEE_UUID));
@@ -322,6 +325,20 @@ TEE_Result trx_tss_deserialize(trx_tss *tss, void *data, size_t data_size)
         if (res != TEE_SUCCESS)
         {
             EMSG("failed calling function \'trx_pobj_set_data_size\'");
+            return TEE_ERROR_GENERIC;
+        }
+        cpy_ptr += sizeof(size_t);
+        left -= sizeof(size_t);
+        if (left < sizeof(size_t))
+        {
+            EMSG("failed checking size of \"data\" buffer");
+            return TEE_ERROR_GENERIC;
+        }
+        memcpy(&tmp_size, cpy_ptr, sizeof(size_t));
+        res = trx_pobj_set_file_size(pobj, tmp_size);
+        if (res != TEE_SUCCESS)
+        {
+            EMSG("failed calling function \'trx_pobj_set_file_size\'");
             return TEE_ERROR_GENERIC;
         }
         cpy_ptr += sizeof(size_t);

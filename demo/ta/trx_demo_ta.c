@@ -110,7 +110,7 @@ out:
     return res;
 }
 
-TEE_Result list(trx_handle handle)
+/*TEE_Result list(trx_handle handle)
 {
     TEE_Result res;
     char *data = NULL, *paths = NULL;
@@ -207,7 +207,7 @@ out:
     free(paths);
     free(data);
     return res;
-}
+}*/
 
 TEE_Result mount(trx_handle handle)
 {
@@ -362,7 +362,7 @@ TEE_Result TA_OpenSessionEntryPoint(uint32_t param_types, TEE_Param params[4], v
                 return res;
             }
         }
-        else if (strncmp(input, "list", strlen("list")) == 0)
+        /*else if (strncmp(input, "list", strlen("list")) == 0)
         {
             res = list(handle);
             if (res != TEE_SUCCESS)
@@ -370,7 +370,7 @@ TEE_Result TA_OpenSessionEntryPoint(uint32_t param_types, TEE_Param params[4], v
                 EMSG("Failed calling function list with code 0x%x", res);
                 return res;
             }
-        }
+        }*/
         else if (strncmp(input, "mount", strlen("mount")) == 0)
         {
             res = mount(handle);

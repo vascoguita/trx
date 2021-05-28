@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <tee_internal_api.h>
-#include "trx_manager_private.h"
 #include <ree_fs_api.h>
 #include "trx_volume.h"
 #include "trx_cipher.h"
@@ -29,6 +28,7 @@ trx_pobj *trx_pobj_init(void)
     pobj->version = 0;
     pobj->udid = NULL;
     pobj->udid_size = 0;
+    pobj->file_size = 0;
 
     DMSG("initialized pobj");
 
@@ -144,18 +144,42 @@ TEE_Result trx_pobj_set_data_size(trx_pobj *pobj, size_t data_size)
     return TEE_SUCCESS;
 }
 
+TEE_Result trx_pobj_set_file_size(trx_pobj *pobj, size_t file_size)
+{
+    DMSG("setting pobj file_size: %zu", file_size);
+
+    pobj->file_size = file_size;
+
+    DMSG("set pobj file_size: %zu", pobj->file_size);
+    return TEE_SUCCESS;
+}
+
 TEE_Result trx_pobj_set_udid(trx_pobj *pobj, void *udid, size_t udid_size)
 {
     DMSG("setting pobj udid: \"%s\", udid_size: %zu", (char *)udid, udid_size);
 
-    free(pobj->udid);
-    if (!(pobj->udid = malloc(udid_size)))
+    if (pobj->udid_size != udid_size)
     {
-        EMSG("failed calling function \'malloc\'");
-        return TEE_ERROR_GENERIC;
+        free(pobj->udid);
+        if (!(pobj->udid = malloc(udid_size)))
+        {
+            EMSG("failed calling function \'malloc\'");
+            return TEE_ERROR_GENERIC;
+        }
+        pobj->udid_size = udid_size;
+        memcpy(pobj->udid, udid, udid_size);
     }
-    pobj->udid_size = udid_size;
-    memcpy(pobj->udid, udid, udid_size);
+    else if (memcmp(pobj->udid, udid, udid_size))
+    {
+        free(pobj->udid);
+        if (!(pobj->udid = malloc(udid_size)))
+        {
+            EMSG("failed calling function \'malloc\'");
+            return TEE_ERROR_GENERIC;
+        }
+        pobj->udid_size = udid_size;
+        memcpy(pobj->udid, udid, udid_size);
+    }
 
     DMSG("set pobj udid: \"%s\", udid_size: %zu", (char *)(pobj->udid), pobj->udid_size);
     return TEE_SUCCESS;
@@ -223,32 +247,11 @@ TEE_Result trx_pobj_save(trx_pobj *pobj)
 {
     TEE_Result res;
     int fd;
-    uint8_t *data_enc, sizeof_size, *data = NULL;
-    size_t data_size, data_enc_size, ree_path_size;
+    uint8_t *data_enc = NULL;
+    size_t data_enc_size, ree_path_size;
     char *ree_path;
 
     pobj->version++;
-
-    if (pobj->udid_size != ibme->udid_size)
-    {
-        res = trx_pobj_set_udid(pobj, ibme->udid, ibme->udid_size);
-        if (res != TEE_SUCCESS)
-        {
-            EMSG("failed calling function \'trx_pobj_set_udid\'");
-            res = TEE_ERROR_GENERIC;
-            goto out;
-        }
-    }
-    else if (memcmp(pobj->udid, ibme->udid, ibme->udid_size))
-    {
-        res = trx_pobj_set_udid(pobj, ibme->udid, ibme->udid_size);
-        if (res != TEE_SUCCESS)
-        {
-            EMSG("failed calling function \'trx_pobj_set_udid\'");
-            res = TEE_ERROR_GENERIC;
-            goto out;
-        }
-    }
 
     DMSG("saving pobj, version: %lu, udid: %s, udid_size: %zu", pobj->version, (char *)pobj->udid, pobj->udid_size);
 
@@ -261,17 +264,12 @@ TEE_Result trx_pobj_save(trx_pobj *pobj)
         res = TEE_ERROR_GENERIC;
         goto out;
     }
-    sizeof_size = sizeof(size_t);
-    data_size = sizeof_size + data_enc_size;
-    if (!(data = malloc(data_size)))
+    if (!(data_enc = malloc(data_enc_size)))
     {
         EMSG("failed calling function \'malloc\'");
         res = TEE_ERROR_GENERIC;
         goto out;
     }
-    memcpy(data, &data_enc_size, sizeof_size);
-    data_enc = data + sizeof_size;
-
     res = trx_cipher_encrypt(pobj->tss->volume->vk, pobj->tss->uuid, pobj->data,
                              pobj->data_size, pobj->version, pobj->id, pobj->id_size,
                              pobj->udid, pobj->udid_size, data_enc, &data_enc_size);
@@ -297,7 +295,7 @@ TEE_Result trx_pobj_save(trx_pobj *pobj)
         res = TEE_ERROR_GENERIC;
         goto out;
     }
-    res = ree_fs_api_write(fd, 0, data, data_size);
+    res = ree_fs_api_write(fd, 0, data_enc, data_enc_size);
     if (res != TEE_SUCCESS)
     {
         EMSG("failed calling function \'ree_fs_api_write\'");
@@ -305,10 +303,12 @@ TEE_Result trx_pobj_save(trx_pobj *pobj)
         goto out;
     }
 
+    pobj->file_size = data_enc_size;
+
     DMSG("saved pobj, version: %lu", pobj->version);
 
 out:
-    free(data);
+    free(data_enc);
     ree_fs_api_close(fd);
     return res;
 }
@@ -317,8 +317,8 @@ TEE_Result trx_pobj_load(trx_pobj *pobj)
 {
     int fd;
     TEE_Result res;
-    uint8_t *data = NULL, sizeof_size;
-    size_t data_size, ree_path_size, tmp_size;
+    uint8_t *data_enc = NULL;
+    size_t data_enc_size, ree_path_size;
     char *ree_path;
 
     DMSG("loading pobj");
@@ -331,6 +331,14 @@ TEE_Result trx_pobj_load(trx_pobj *pobj)
     }
     ree_path_size = strlen(ree_path) + 1;
 
+    data_enc_size = pobj->file_size;
+    if (!(data_enc = malloc(data_enc_size)))
+    {
+        EMSG("failed calling function \'malloc\'");
+        res = TEE_ERROR_GENERIC;
+        goto out;
+    }
+
     res = ree_fs_api_open(ree_path, ree_path_size, &fd);
     if (res != TEE_SUCCESS)
     {
@@ -338,27 +346,8 @@ TEE_Result trx_pobj_load(trx_pobj *pobj)
         res = TEE_ERROR_GENERIC;
         goto out;
     }
-    sizeof_size = sizeof(size_t);
-    tmp_size = sizeof_size;
-    res = ree_fs_api_read(fd, 0, &data_size, &tmp_size);
-    if ((res != TEE_SUCCESS) || (tmp_size != sizeof_size))
-    {
-        EMSG("failed calling function \'ree_fs_api_read\'");
-        res = TEE_ERROR_GENERIC;
-        goto out;
-    }
-
-    if (!(data = malloc(data_size)))
-    {
-        EMSG("failed calling function \'malloc\'");
-        res = TEE_ERROR_GENERIC;
-        goto out;
-    }
-
-    tmp_size = data_size;
-    res = ree_fs_api_read(fd, sizeof_size, data, &tmp_size);
-
-    if ((res != TEE_SUCCESS) || (tmp_size != data_size))
+    res = ree_fs_api_read(fd, 0, data_enc, &data_enc_size);
+    if ((res != TEE_SUCCESS) || (data_enc_size != pobj->file_size))
     {
         EMSG("failed calling function \'ree_fs_api_read\'");
         res = TEE_ERROR_GENERIC;
@@ -366,14 +355,13 @@ TEE_Result trx_pobj_load(trx_pobj *pobj)
     }
 
     trx_pobj_clear_data(pobj);
-
     if (!(pobj->data = malloc(pobj->data_size)))
     {
         EMSG("failed calling function \'malloc\'");
         res = TEE_ERROR_GENERIC;
         goto out;
     }
-    res = trx_cipher_decrypt(pobj->tss->volume->vk, pobj->tss->uuid, data, data_size,
+    res = trx_cipher_decrypt(pobj->tss->volume->vk, pobj->tss->uuid, data_enc, data_enc_size,
                              pobj->version, pobj->id, pobj->id_size,
                              pobj->udid, pobj->udid_size, pobj->data, &(pobj->data_size));
     if (res != TEE_SUCCESS)
@@ -387,6 +375,6 @@ TEE_Result trx_pobj_load(trx_pobj *pobj)
 
 out:
     ree_fs_api_close(fd);
-    free(data);
+    free(data_enc);
     return res;
 }

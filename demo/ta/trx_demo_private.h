@@ -6,7 +6,7 @@
 
 TEE_Result write(trx_handle handle);
 TEE_Result read(trx_handle handle);
-TEE_Result list(trx_handle handle);
+//TEE_Result list(trx_handle handle);
 TEE_Result mount(trx_handle handle);
 TEE_Result share(trx_handle handle);
 

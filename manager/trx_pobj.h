@@ -19,6 +19,7 @@ typedef struct _trx_pobj
     unsigned long int version;
     void *udid;
     size_t udid_size;
+    size_t file_size;
 } trx_pobj;
 
 trx_pobj *trx_pobj_init(void);
@@ -35,6 +36,7 @@ TEE_Result trx_pobj_set_ree_basename(trx_pobj *pobj, char *ree_basename, size_t 
 TEE_Result trx_pobj_set_tss(trx_pobj *pobj, struct _trx_tss *tss);
 TEE_Result trx_pobj_set_version(trx_pobj *pobj, unsigned long int version);
 TEE_Result trx_pobj_set_data_size(trx_pobj *pobj, size_t data_size);
+TEE_Result trx_pobj_set_file_size(trx_pobj *pobj, size_t file_size);
 
 TEE_Result trx_pobj_save(trx_pobj *pobj);
 TEE_Result trx_pobj_load(trx_pobj *pobj);

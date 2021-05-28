@@ -2,59 +2,39 @@
 #include <trx_manager_ta.h>
 #include "trx_manager_private.h"
 
+trx_volume_table *volume_table = NULL;
+trx_ibme *ibme = NULL;
+
 TEE_Result TA_CreateEntryPoint(void)
 {
     TEE_Result res;
 
     DMSG("has been called");
 
-    setup_is_completed = false;
-
-    if(trx_ibme_exists())
+    if (!(ibme = trx_ibme_init()))
     {
-        if(!(ibme = trx_ibme_init()))
-        {
-            EMSG("failed calling function \'trx_ibme_init\'");
-            return TEE_ERROR_GENERIC;
-        }
-
-        res = trx_ibme_load(ibme);
-        if(res != TEE_SUCCESS)
-        {
-            EMSG("failed calling function \'trx_ibme_load\'");
-            trx_ibme_clear(ibme);
-            return TEE_ERROR_GENERIC;
-        }
-
-        setup_is_completed = true;
-    }
-
-    if(!(volume_table = trx_volume_table_init()))
-    {
-        EMSG("failed calling function \'trx_volume_table_init\'");
-        trx_ibme_clear(ibme);
+        EMSG("failed calling function \'trx_ibme_init\'");
         return TEE_ERROR_GENERIC;
     }
-    
-    if(trx_volume_table_exists())
-    {
-        res = trx_volume_table_load(volume_table);
-        if(res != TEE_SUCCESS)
-        {
-            EMSG("failed calling function \'trx_volume_table_load\'");
-            trx_volume_table_clear(volume_table);
-            trx_ibme_clear(ibme);
-            return TEE_ERROR_GENERIC;
-        }
 
-        res = trx_volume_table_load_volumes(volume_table);
-        if(res != TEE_SUCCESS)
-        {
-            EMSG("failed calling function \'trx_volume_table_load_volumes\'");
-            trx_volume_table_clear(volume_table);
-            trx_ibme_clear(ibme);
-            return TEE_ERROR_GENERIC;
-        }
+    res = trx_ibme_load(ibme);
+    if (res != TEE_SUCCESS && res != TEE_ERROR_ITEM_NOT_FOUND)
+    {
+        EMSG("failed calling function \'trx_ibme_load\'");
+        return TEE_ERROR_GENERIC;
+    }
+
+    if (!(volume_table = trx_volume_table_init()))
+    {
+        EMSG("failed calling function \'trx_volume_table_init\'");
+        return TEE_ERROR_GENERIC;
+    }
+
+    res = trx_volume_table_load(volume_table);
+    if (res != TEE_SUCCESS && res != TEE_ERROR_ITEM_NOT_FOUND)
+    {
+        EMSG("failed calling function \'trx_volume_table_load\'");
+        return TEE_ERROR_GENERIC;
     }
 
     return TEE_SUCCESS;
@@ -63,9 +43,15 @@ TEE_Result TA_CreateEntryPoint(void)
 void TA_DestroyEntryPoint(void)
 {
     DMSG("has been called");
-    
-    trx_ibme_clear(ibme);
-    trx_volume_table_clear(volume_table);
+
+    if (ibme)
+    {
+        trx_ibme_clear(ibme);
+    }
+    if (volume_table)
+    {
+        trx_volume_table_clear(volume_table);
+    }
 }
 
 TEE_Result TA_OpenSessionEntryPoint(uint32_t param_types, TEE_Param params[4], void **sess_ctx)
@@ -109,39 +95,44 @@ TEE_Result TA_InvokeCommandEntryPoint(void *sess_ctx, uint32_t cmd, uint32_t par
     switch (cmd)
     {
     case TA_TRX_MANAGER_CMD_SETUP:
+        if (trx_ibme_isloaded(ibme))
+        {
+            EMSG("Access Denied: TRX has already been provided with IB-ME keys");
+            return TEE_ERROR_GENERIC;
+        }
         return setup(sess_ctx, param_types, params);
     case TA_TRX_MANAGER_CMD_WRITE:
-        if ((identity.login != TEE_LOGIN_TRUSTED_APP) && setup_is_completed)
+        if ((identity.login != TEE_LOGIN_TRUSTED_APP) || !trx_ibme_isloaded(ibme))
         {
-            EMSG("Access Denied: Only TAs are allowed to use TRX");
+            EMSG("Access Denied: Write entry point is only accessible to TAs and after setup");
             return TEE_ERROR_GENERIC;
         }
         return write(sess_ctx, param_types, params);
     case TA_TRX_MANAGER_CMD_READ:
-        if ((identity.login != TEE_LOGIN_TRUSTED_APP) && setup_is_completed)
+        if ((identity.login != TEE_LOGIN_TRUSTED_APP) || !trx_ibme_isloaded(ibme))
         {
-            EMSG("Access Denied: Only TAs are allowed to use TRX");
+            EMSG("Access Denied: Read entry point is only accessible to TAs and after setup");
             return TEE_ERROR_GENERIC;
         }
         return read(sess_ctx, param_types, params);
-    case TA_TRX_MANAGER_CMD_LIST:
-        if ((identity.login != TEE_LOGIN_TRUSTED_APP) && setup_is_completed)
+    /*case TA_TRX_MANAGER_CMD_LIST:
+        if ((identity.login != TEE_LOGIN_TRUSTED_APP) || !trx_ibme_isloaded(ibme))
         {
-            EMSG("Access Denied: Only TAs are allowed to use TRX");
+            EMSG("Access Denied: List entry point is only accessible to TAs and after setup");
             return TEE_ERROR_GENERIC;
         }
-        return list(sess_ctx, param_types, params);
+        return list(sess_ctx, param_types, params);*/
     case TA_TRX_MANAGER_CMD_MOUNT:
-        if ((identity.login != TEE_LOGIN_TRUSTED_APP) && setup_is_completed)
+        if ((identity.login != TEE_LOGIN_TRUSTED_APP) || !trx_ibme_isloaded(ibme))
         {
-            EMSG("Access Denied: Only TAs are allowed to use TRX");
+            EMSG("Access Denied: Mount entry point is only accessible to TAs and after setup");
             return TEE_ERROR_GENERIC;
         }
         return mount(sess_ctx, param_types, params);
     case TA_TRX_MANAGER_CMD_SHARE:
-        if ((identity.login != TEE_LOGIN_TRUSTED_APP) && setup_is_completed)
+        if ((identity.login != TEE_LOGIN_TRUSTED_APP) || !trx_ibme_isloaded(ibme))
         {
-            EMSG("Access Denied: Only TAs are allowed to use TRX");
+            EMSG("Access Denied: Share entry point is only accessible to TAs and after setup");
             return TEE_ERROR_GENERIC;
         }
         return share(sess_ctx, param_types, params);

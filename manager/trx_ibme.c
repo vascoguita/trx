@@ -30,6 +30,7 @@ trx_ibme *trx_ibme_init(void)
     ibme->param_str_size = 0;
     ibme->udid = NULL;
     ibme->udid_size = 0;
+    ibme->isloaded = false;
 
     DMSG("initialized ibme");
 
@@ -42,96 +43,37 @@ void trx_ibme_clear(trx_ibme *ibme)
 
     if (ibme)
     {
-        if(ibme->mpk)
+        if (ibme->mpk)
         {
             MPK_clear(ibme->mpk);
         }
-        if(ibme->ek)
+        if (ibme->ek)
         {
             EK_clear(ibme->ek);
         }
-        if(ibme->dk)
+        if (ibme->dk)
         {
             DK_clear(ibme->dk);
         }
         if (ibme->pairing)
         {
-            if(*(ibme->pairing))
+            if (*(ibme->pairing))
             {
                 pairing_clear(*(ibme->pairing));
             }
             free(ibme->pairing);
         }
-        if(ibme->param_str)
+        if (ibme->param_str)
         {
             free(ibme->param_str);
         }
-        if(ibme->udid)
+        if (ibme->udid)
         {
             free(ibme->udid);
         }
     }
     free(ibme);
     DMSG("cleared ibme");
-}
-
-trx_ibme *trx_ibme_create(char *param_str, size_t param_str_size, char *mpk_str, size_t mpk_str_size,
-                          char *ek_str, size_t ek_str_size, char *dk_str, size_t dk_str_size, void *udid,
-                          size_t udid_size)
-{
-    trx_ibme *ibme;
-    TEE_Result res;
-
-    DMSG("creating ibme, param_str: \"%s\" with param_str_size: %zu, mpk_str: \"%s\" with mpk_str_size: %zu, "
-         "ek_str: \"%s\" with ek_str_size: %zu, dk_str: \"%s\" with dk_str_size: %zu, udid: \"%s\" with "
-         "udid_size: %zu",
-         param_str, param_str_size, mpk_str, mpk_str_size, ek_str, ek_str_size, dk_str,
-         dk_str_size, (char *)udid, udid_size);
-
-    if (!(ibme = trx_ibme_init()))
-    {
-        EMSG("failed calling function \'trx_ibme_init\'");
-        return NULL;
-    }
-    res = trx_ibme_set_udid(ibme, udid, udid_size);
-    if (res != TEE_SUCCESS)
-    {
-        EMSG("failed calling function \'trx_ibme_set_udid\'");
-        trx_ibme_clear(ibme);
-        return NULL;
-    }
-    res = trx_ibme_set_param_str(ibme, param_str, param_str_size);
-    if (res != TEE_SUCCESS)
-    {
-        EMSG("failed calling function \'trx_ibme_set_param_str\'");
-        trx_ibme_clear(ibme);
-        return NULL;
-    }
-    res = trx_ibme_set_mpk(ibme, mpk_str, mpk_str_size);
-    if (res != TEE_SUCCESS)
-    {
-        EMSG("failed calling function \'trx_ibme_set_mpk\'");
-        trx_ibme_clear(ibme);
-        return NULL;
-    }
-    res = trx_ibme_set_ek(ibme, ek_str, ek_str_size);
-    if (res != TEE_SUCCESS)
-    {
-        EMSG("failed calling function \'trx_ibme_set_ek\'");
-        trx_ibme_clear(ibme);
-        return NULL;
-    }
-    res = trx_ibme_set_dk(ibme, dk_str, dk_str_size);
-    if (res != TEE_SUCCESS)
-    {
-        EMSG("failed calling function \'trx_ibme_set_dk\'");
-        trx_ibme_clear(ibme);
-        return NULL;
-    }
-
-    DMSG("created ibme");
-
-    return ibme;
 }
 
 TEE_Result trx_ibme_set_udid(trx_ibme *ibme, void *udid, size_t udid_size)
@@ -501,6 +443,8 @@ TEE_Result trx_ibme_deserialize(trx_ibme *ibme, void *data, size_t data_size)
         return TEE_ERROR_GENERIC;
     }
 
+    ibme->isloaded = true;
+
     DMSG("deserialized ibme");
 
     return TEE_SUCCESS;
@@ -597,7 +541,6 @@ TEE_Result trx_ibme_load(trx_ibme *ibme)
     if (res != TEE_SUCCESS)
     {
         EMSG("failed calling function \'TEE_OpenPersistentObject\'");
-        res = TEE_ERROR_GENERIC;
         goto out;
     }
 
@@ -641,45 +584,17 @@ out:
     return res;
 }
 
-bool trx_ibme_exists(void)
+bool trx_ibme_isloaded(trx_ibme *ibme)
 {
-    uint8_t *id = NULL;
-    TEE_Result res;
-    uint32_t flags;
-    size_t id_size;
-    TEE_ObjectHandle obj = TEE_HANDLE_NULL;
-    bool ret;
+    DMSG("checking if ibme keys are loaded");
 
-    DMSG("checking if volume_table exists");
-
-    id_size = strlen(trx_ibme_id) + 1;
-    if (!(id = TEE_Malloc(id_size, 0)))
+    if (ibme->isloaded)
     {
-        EMSG("failed calling function \'TEE_Malloc\'");
-        ret = false;
-        goto out;
+        DMSG("ibme keys are loaded");
     }
-    TEE_MemMove(id, trx_ibme_id, id_size);
-
-    flags = TEE_DATA_FLAG_ACCESS_READ | TEE_DATA_FLAG_SHARE_READ;
-
-    res = TEE_OpenPersistentObject(TEE_STORAGE_PRIVATE, id, id_size, flags, &obj);
-    if (res != TEE_SUCCESS)
+    else
     {
-        DMSG("ibme does not exist");
-        ret = false;
-        goto out;
+        DMSG("ibme keys are not loaded");
     }
-    ret = true;
-
-    DMSG("ibme exists");
-
-out:
-    if (obj != TEE_HANDLE_NULL)
-    {
-        TEE_CloseObject(obj);
-    }
-    TEE_Free(id);
-
-    return ret;
+    return ibme->isloaded;
 }

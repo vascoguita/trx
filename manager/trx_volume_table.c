@@ -224,10 +224,21 @@ TEE_Result trx_volume_table_load(trx_volume_table *volume_table)
         goto out;
     }
 
+    res = trx_volume_table_load_volumes(volume_table);
+    if (res != TEE_SUCCESS)
+    {
+        EMSG("failed calling function \'trx_volume_table_load_volumes\'");
+        res = TEE_ERROR_GENERIC;
+        goto out;
+    }
+
     DMSG("loaded volume_table");
 
 out:
-    free(data);
+    if (data)
+    {
+        free(data);
+    }
     if (obj != TEE_HANDLE_NULL)
     {
         TEE_CloseObject(obj);
@@ -259,49 +270,6 @@ TEE_Result trx_volume_table_load_volumes(trx_volume_table *volume_table)
     DMSG("loaded volumes to volume_table");
 
     return TEE_SUCCESS;
-}
-
-bool trx_volume_table_exists(void)
-{
-    uint8_t *id = NULL;
-    TEE_Result res;
-    uint32_t flags;
-    size_t id_size;
-    TEE_ObjectHandle obj = TEE_HANDLE_NULL;
-    bool ret;
-
-    DMSG("checking if volume_table exists");
-
-    id_size = strlen(trx_volume_table_id) + 1;
-    if (!(id = TEE_Malloc(id_size, 0)))
-    {
-        EMSG("failed calling function \'TEE_Malloc\'");
-        ret = false;
-        goto out;
-    }
-    TEE_MemMove(id, trx_volume_table_id, id_size);
-
-    flags = TEE_DATA_FLAG_ACCESS_READ | TEE_DATA_FLAG_SHARE_READ;
-
-    res = TEE_OpenPersistentObject(TEE_STORAGE_PRIVATE, id, id_size, flags, &obj);
-    if (res != TEE_SUCCESS)
-    {
-        DMSG("volume_table does not exist");
-        ret = false;
-        goto out;
-    }
-    ret = true;
-
-    DMSG("volume_table exists");
-
-out:
-    if (obj != TEE_HANDLE_NULL)
-    {
-        TEE_CloseObject(obj);
-    }
-    TEE_Free(id);
-
-    return ret;
 }
 
 TEE_Result trx_volume_table_serialize(trx_volume_table *volume_table, void *data, size_t *data_size)
@@ -533,7 +501,7 @@ TEE_Result trx_volume_table_deserialize(trx_volume_table *volume_table, void *da
     return TEE_SUCCESS;
 }
 
-TEE_Result trx_volume_table_serialize_paths(trx_volume_table *volume_table, TEE_UUID *uuid, void *data, size_t *data_size)
+/*TEE_Result trx_volume_table_serialize_paths(trx_volume_table *volume_table, TEE_UUID *uuid, void *data, size_t *data_size)
 {
     TEE_Result res;
     size_t exp_dst_size, path_str_size;
@@ -623,4 +591,4 @@ TEE_Result trx_volume_table_serialize_paths(trx_volume_table *volume_table, TEE_
 
     DMSG("serialized volume table paths");
     return TEE_SUCCESS;
-}
+}*/

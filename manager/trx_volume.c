@@ -6,7 +6,6 @@
 #include <sys/queue.h>
 
 #include "trx_manager_ta.h"
-#include "trx_manager_private.h"
 #include "trx_volume.h"
 #include "trx_tss.h"
 #include "trx_ibme.h"
@@ -128,14 +127,29 @@ TEE_Result trx_volume_set_udid(trx_volume *volume, void *udid, size_t udid_size)
 {
     DMSG("setting volume udid: \"%s\", udid_size: %zu", (char *)udid, udid_size);
 
-    free(volume->udid);
-    if (!(volume->udid = malloc(udid_size)))
+    
+    if (volume->udid_size != udid_size)
     {
-        EMSG("failed calling function \'malloc\'");
-        return TEE_ERROR_GENERIC;
+        free(volume->udid);
+        if (!(volume->udid = malloc(udid_size)))
+        {
+            EMSG("failed calling function \'malloc\'");
+            return TEE_ERROR_GENERIC;
+        }
+        volume->udid_size = udid_size;
+        memcpy(volume->udid, udid, udid_size);
     }
-    volume->udid_size = udid_size;
-    memcpy(volume->udid, udid, udid_size);
+    else if (memcmp(volume->udid, udid, udid_size))
+    {
+        free(volume->udid);
+        if (!(volume->udid = malloc(udid_size)))
+        {
+            EMSG("failed calling function \'malloc\'");
+            return TEE_ERROR_GENERIC;
+        }
+        volume->udid_size = udid_size;
+        memcpy(volume->udid, udid, udid_size);
+    }
 
     DMSG("set volume udid: \"%s\", udid_size: %zu", (char *)(volume->udid), volume->udid_size);
     return TEE_SUCCESS;
@@ -377,27 +391,6 @@ TEE_Result trx_volume_save(trx_volume *volume)
     TEE_UUID uuid = TA_TRX_MANAGER_UUID;
 
     volume->version++;
-
-    if (volume->udid_size != ibme->udid_size)
-    {
-        res = trx_volume_set_udid(volume, ibme->udid, ibme->udid_size);
-        if (res != TEE_SUCCESS)
-        {
-            EMSG("failed calling function \'trx_volume_set_udid\'");
-            res = TEE_ERROR_GENERIC;
-            goto out;
-        }
-    }
-    else if (memcmp(volume->udid, ibme->udid, ibme->udid_size))
-    {
-        res = trx_volume_set_udid(volume, ibme->udid, ibme->udid_size);
-        if (res != TEE_SUCCESS)
-        {
-            EMSG("failed calling function \'trx_volume_set_udid\'");
-            res = TEE_ERROR_GENERIC;
-            goto out;
-        }
-    }
 
     DMSG("saving volume, version: %lu, udid: %s, udid_size: %zu", volume->version,
          (char *)volume->udid, volume->udid_size);
@@ -763,7 +756,7 @@ TEE_Result trx_volume_share_deserialize(trx_volume *volume, void *data, size_t d
     return TEE_SUCCESS;
 }
 
-TEE_Result trx_volume_share(trx_volume *volume, char *R, size_t R_size)
+TEE_Result trx_volume_share(trx_volume *volume, char *R, size_t R_size, trx_ibme *ibme)
 {
     TEE_Result res;
     Cipher *volume_share_enc = NULL;
@@ -869,7 +862,7 @@ out:
     return res;
 }
 
-TEE_Result trx_volume_import(trx_volume *volume, char *S, size_t S_size)
+TEE_Result trx_volume_import(trx_volume *volume, char *S, size_t S_size, trx_ibme *ibme)
 {
     Cipher *volume_share_enc = NULL;
     TEE_Result res;
