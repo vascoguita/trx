@@ -35,8 +35,6 @@ TEE_Result trx_volume_table_load_volumes(trx_volume_table *volume_table);
 TEE_Result trx_volume_table_serialize(trx_volume_table *volume_table, void *data, size_t *data_size);
 TEE_Result trx_volume_table_deserialize(trx_volume_table *volume_table, void *data, size_t data_size);
 
-//TEE_Result trx_volume_table_serialize_paths(trx_volume_table *volume_table, TEE_UUID *uuid, void *data, size_t *data_size);
-
 char *trx_volume_table_gen_ree_dirname(trx_volume_table *volume_table);
 
 static const char trx_volume_table_id[] = "trx_volume_table";

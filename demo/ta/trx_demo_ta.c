@@ -110,154 +110,6 @@ out:
     return res;
 }
 
-/*TEE_Result list(trx_handle handle)
-{
-    TEE_Result res;
-    char *data = NULL, *paths = NULL;
-    size_t data_size = 0, path_size, left, paths_size = 0;
-    uint8_t *cpy_ptr;
-    long unsigned int n_paths, i;
-
-    res = trx_list(handle, data, &data_size);
-    if (res != TEE_ERROR_SHORT_BUFFER)
-    {
-        DMSG("trx_list failed with code 0x%x", res);
-        res = TEE_ERROR_GENERIC;
-        goto out;
-    }
-    if (!(data = malloc(data_size)))
-    {
-        DMSG("malloc failed");
-        res = TEE_ERROR_GENERIC;
-        goto out;
-    }
-    res = trx_list(handle, data, &data_size);
-    if (res != TEE_SUCCESS)
-    {
-        DMSG("trx_list failed with code 0x%x", res);
-        res = TEE_ERROR_GENERIC;
-        goto out;
-    }
-    cpy_ptr = (uint8_t *)data;
-    left = data_size;
-    if (left < sizeof(long unsigned int))
-    {
-        EMSG("failed checking size of \"data\" buffer");
-        res = TEE_ERROR_GENERIC;
-        goto out;
-    }
-    memcpy(&n_paths, cpy_ptr, sizeof(long unsigned int));
-    cpy_ptr += sizeof(long unsigned int);
-    left -= sizeof(long unsigned int);
-
-    for (i = 0; i < n_paths; i++)
-    {
-        if (left < sizeof(size_t))
-        {
-            EMSG("failed checking size of \"data\" buffer");
-            res = TEE_ERROR_GENERIC;
-            goto out;
-        }
-        memcpy(&path_size, cpy_ptr, sizeof(size_t));
-        cpy_ptr += sizeof(size_t);
-        left -= sizeof(size_t);
-
-        if (left < path_size)
-        {
-            EMSG("failed checking size of \"data\" buffer");
-            res = TEE_ERROR_GENERIC;
-            goto out;
-        }
-
-        if (paths)
-        {
-            paths[paths_size - 1] = '\n';
-        }
-
-        paths_size += path_size;
-        if (!(paths = realloc(paths, paths_size)))
-        {
-            EMSG("Failed to print with code 0x%x", res);
-            res = TEE_ERROR_GENERIC;
-            goto out;
-        }
-
-        memcpy(paths + paths_size - path_size, cpy_ptr, path_size);
-        cpy_ptr += path_size;
-        left -= path_size;
-    }
-    if (left != 0)
-    {
-        EMSG("failed checking size of \"data\" buffer");
-        res = TEE_ERROR_GENERIC;
-        goto out;
-    }
-    
-    if(paths_size)
-    {
-        res = TUI->print(paths);
-        if (res != TEE_SUCCESS)
-        {
-            EMSG("Failed to print with code 0x%x", res);
-            res = TEE_ERROR_GENERIC;
-            goto out;
-        }
-    }
-out:
-    free(paths);
-    free(data);
-    return res;
-}*/
-
-TEE_Result mount(trx_handle handle)
-{
-    TEE_Result res;
-    char input[100], *id = NULL, *mount_point = NULL, *dirname = NULL;
-    size_t input_size, id_size, mount_point_size, dirname_size;
-
-    input_size = 100;
-
-    res = TUI->input("Enter dirname: ", input, input_size);
-    if (res != TEE_SUCCESS)
-    {
-        EMSG("Failed to input with code 0x%x", res);
-        res = TEE_ERROR_GENERIC;
-        goto out;
-    }
-    dirname = strdup(input);
-    dirname_size = strlen(dirname) + 1;
-    res = TUI->input("Enter mount point: ", input, input_size);
-    if (res != TEE_SUCCESS)
-    {
-        EMSG("Failed to input with code 0x%x", res);
-        res = TEE_ERROR_GENERIC;
-        goto out;
-    }
-    mount_point = strdup(input);
-    mount_point_size = strlen(mount_point) + 1;
-    res = TUI->input("Enter sender ID: ", input, input_size);
-    if (res != TEE_SUCCESS)
-    {
-        EMSG("Failed to input with code 0x%x", res);
-        res = TEE_ERROR_GENERIC;
-        goto out;
-    }
-    id = strdup(input);
-    id_size = strlen(id) + 1;
-    res = trx_mount(handle, (unsigned char *)id, id_size, dirname, dirname_size, mount_point, mount_point_size);
-    if (res != TEE_SUCCESS)
-    {
-        DMSG("trx_mount failed with code 0x%x", res);
-        res = TEE_ERROR_GENERIC;
-        goto out;
-    }
-out:
-    free(mount_point);
-    free(dirname);
-    free(id);
-    return res;
-}
-
 TEE_Result share(trx_handle handle)
 {
     TEE_Result res;
@@ -305,6 +157,55 @@ out:
     free(mount_point);
     free(id);
     free(label);
+    return res;
+}
+
+TEE_Result mount(trx_handle handle)
+{
+    TEE_Result res;
+    char input[100], *id = NULL, *mount_point = NULL, *dirname = NULL;
+    size_t input_size, id_size, mount_point_size, dirname_size;
+
+    input_size = 100;
+
+    res = TUI->input("Enter dirname: ", input, input_size);
+    if (res != TEE_SUCCESS)
+    {
+        EMSG("Failed to input with code 0x%x", res);
+        res = TEE_ERROR_GENERIC;
+        goto out;
+    }
+    dirname = strdup(input);
+    dirname_size = strlen(dirname) + 1;
+    res = TUI->input("Enter mount point: ", input, input_size);
+    if (res != TEE_SUCCESS)
+    {
+        EMSG("Failed to input with code 0x%x", res);
+        res = TEE_ERROR_GENERIC;
+        goto out;
+    }
+    mount_point = strdup(input);
+    mount_point_size = strlen(mount_point) + 1;
+    res = TUI->input("Enter sender ID: ", input, input_size);
+    if (res != TEE_SUCCESS)
+    {
+        EMSG("Failed to input with code 0x%x", res);
+        res = TEE_ERROR_GENERIC;
+        goto out;
+    }
+    id = strdup(input);
+    id_size = strlen(id) + 1;
+    res = trx_mount(handle, (unsigned char *)id, id_size, dirname, dirname_size, mount_point, mount_point_size);
+    if (res != TEE_SUCCESS)
+    {
+        DMSG("trx_mount failed with code 0x%x", res);
+        res = TEE_ERROR_GENERIC;
+        goto out;
+    }
+out:
+    free(mount_point);
+    free(dirname);
+    free(id);
     return res;
 }
 
@@ -362,15 +263,6 @@ TEE_Result TA_OpenSessionEntryPoint(uint32_t param_types, TEE_Param params[4], v
                 return res;
             }
         }
-        /*else if (strncmp(input, "list", strlen("list")) == 0)
-        {
-            res = list(handle);
-            if (res != TEE_SUCCESS)
-            {
-                EMSG("Failed calling function list with code 0x%x", res);
-                return res;
-            }
-        }*/
         else if (strncmp(input, "mount", strlen("mount")) == 0)
         {
             res = mount(handle);

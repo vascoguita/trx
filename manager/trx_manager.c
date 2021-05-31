@@ -324,6 +324,70 @@ TEE_Result read(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
     return TEE_SUCCESS;
 }
 
+TEE_Result share(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
+{
+    uint32_t exp_param_types;
+    char *R, *mount_point, *label;
+    size_t R_size, mount_point_size, label_size;
+    trx_volume *volume;
+    TEE_Result res;
+
+    (void)&sess_ctx;
+
+    DMSG("has been called");
+
+    exp_param_types = TEE_PARAM_TYPES(TEE_PARAM_TYPE_MEMREF_INPUT, TEE_PARAM_TYPE_MEMREF_INPUT,
+                                      TEE_PARAM_TYPE_MEMREF_INPUT, TEE_PARAM_TYPE_NONE);
+    if (param_types != exp_param_types)
+    {
+        EMSG("failed checking parameter types");
+        return TEE_ERROR_BAD_PARAMETERS;
+    }
+
+    R = params[0].memref.buffer;
+    R_size = params[0].memref.size;
+    mount_point = params[1].memref.buffer;
+    mount_point_size = params[1].memref.size;
+    label = params[2].memref.buffer;
+    label_size = params[2].memref.size;
+
+    DMSG("sharing volume mounted on mount_point: \"%s\" with mount_point size: %zu and"
+         " label: \"%s\" with label_point size: %zu with receiver: \"%s\" with receiver size %zu",
+         mount_point, mount_point_size, label, label_size, R, R_size);
+
+    if (!(volume = trx_volume_table_get(volume_table, mount_point, mount_point_size)))
+    {
+        EMSG("failed calling function \'trx_volume_table_get\'");
+        return TEE_ERROR_GENERIC;
+    }
+
+    if (!trx_authorization_share(mount_point, R, volume->version, label))
+    {
+        EMSG("failed calling function \'trx_authorization_share\'");
+        return TEE_ERROR_GENERIC;
+    }
+
+    res = trx_volume_set_label(volume, label, label_size);
+    if (res != TEE_SUCCESS)
+    {
+        EMSG("failed calling function \'trx_volume_set_label\'");
+        return TEE_ERROR_GENERIC;
+    }
+
+    res = trx_volume_share(volume, R, R_size, ibme);
+    if (res != TEE_SUCCESS)
+    {
+        EMSG("failed calling function \'trx_volume_share\'");
+        return TEE_ERROR_GENERIC;
+    }
+
+    DMSG("shared volume mounted on mount_point: \"%s\" with mount_point size: %zu and"
+         " label: \"%s\" with label_point size: %zu with receiver: \"%s\" with receiver size %zu",
+         mount_point, mount_point_size, label, label_size, R, R_size);
+
+    return res;
+}
+
 TEE_Result mount(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
 {
     uint32_t exp_param_types;
@@ -419,106 +483,3 @@ TEE_Result mount(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
 
     return res;
 }
-
-TEE_Result share(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
-{
-    uint32_t exp_param_types;
-    char *R, *mount_point, *label;
-    size_t R_size, mount_point_size, label_size;
-    trx_volume *volume;
-    TEE_Result res;
-
-    (void)&sess_ctx;
-
-    DMSG("has been called");
-
-    exp_param_types = TEE_PARAM_TYPES(TEE_PARAM_TYPE_MEMREF_INPUT, TEE_PARAM_TYPE_MEMREF_INPUT,
-                                      TEE_PARAM_TYPE_MEMREF_INPUT, TEE_PARAM_TYPE_NONE);
-    if (param_types != exp_param_types)
-    {
-        EMSG("failed checking parameter types");
-        return TEE_ERROR_BAD_PARAMETERS;
-    }
-
-    R = params[0].memref.buffer;
-    R_size = params[0].memref.size;
-    mount_point = params[1].memref.buffer;
-    mount_point_size = params[1].memref.size;
-    label = params[2].memref.buffer;
-    label_size = params[2].memref.size;
-
-    DMSG("sharing volume mounted on mount_point: \"%s\" with mount_point size: %zu and"
-         " label: \"%s\" with label_point size: %zu with receiver: \"%s\" with receiver size %zu",
-         mount_point, mount_point_size, label, label_size, R, R_size);
-
-    if (!(volume = trx_volume_table_get(volume_table, mount_point, mount_point_size)))
-    {
-        EMSG("failed calling function \'trx_volume_table_get\'");
-        return TEE_ERROR_GENERIC;
-    }
-
-    if (!trx_authorization_share(mount_point, R, volume->version, label))
-    {
-        EMSG("failed calling function \'trx_authorization_share\'");
-        return TEE_ERROR_GENERIC;
-    }
-
-    res = trx_volume_set_label(volume, label, label_size);
-    if (res != TEE_SUCCESS)
-    {
-        EMSG("failed calling function \'trx_volume_set_label\'");
-        return TEE_ERROR_GENERIC;
-    }
-
-    res = trx_volume_share(volume, R, R_size, ibme);
-    if (res != TEE_SUCCESS)
-    {
-        EMSG("failed calling function \'trx_volume_share\'");
-        return TEE_ERROR_GENERIC;
-    }
-
-    DMSG("shared volume mounted on mount_point: \"%s\" with mount_point size: %zu and"
-         " label: \"%s\" with label_point size: %zu with receiver: \"%s\" with receiver size %zu",
-         mount_point, mount_point_size, label, label_size, R, R_size);
-
-    return res;
-}
-
-/* TEE_Result list(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
-{
-    uint32_t exp_param_types, *data_size;
-    TEE_Identity identity;
-    TEE_Result res;
-    TEE_UUID *uuid;
-    uint8_t *data;
-    size_t tmp_data_size;
-
-    (void)&sess_ctx;
-
-    DMSG("has been called");
-
-    exp_param_types = TEE_PARAM_TYPES(TEE_PARAM_TYPE_MEMREF_OUTPUT, TEE_PARAM_TYPE_NONE,
-                                      TEE_PARAM_TYPE_NONE, TEE_PARAM_TYPE_NONE);
-    if (param_types != exp_param_types)
-    {
-        EMSG("failed checking parameter types");
-        return TEE_ERROR_BAD_PARAMETERS;
-    }
-
-    data = params[0].memref.buffer;
-    data_size = &(params[0].memref.size);
-
-    res = TEE_GetPropertyAsIdentity(TEE_PROPSET_CURRENT_CLIENT, "gpd.client.identity", &identity);
-    if (res != TEE_SUCCESS)
-    {
-        EMSG("TRX Manager failed to retrieve client identity, res=0x%08x", res);
-        return res;
-    }
-    uuid = &identity.uuid;
-
-    tmp_data_size = (size_t)(*data_size);
-    res = trx_volume_table_serialize_paths(volume_table, uuid, data, &tmp_data_size);
-    *data_size = (uint32_t)tmp_data_size;
-
-    return res;
-} */

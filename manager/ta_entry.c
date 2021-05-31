@@ -115,13 +115,6 @@ TEE_Result TA_InvokeCommandEntryPoint(void *sess_ctx, uint32_t cmd, uint32_t par
             return TEE_ERROR_GENERIC;
         }
         return read(sess_ctx, param_types, params);
-    /*case TA_TRX_MANAGER_CMD_LIST:
-        if ((identity.login != TEE_LOGIN_TRUSTED_APP) || !trx_ibme_isloaded(ibme))
-        {
-            EMSG("Access Denied: List entry point is only accessible to TAs and after setup");
-            return TEE_ERROR_GENERIC;
-        }
-        return list(sess_ctx, param_types, params);*/
     case TA_TRX_MANAGER_CMD_MOUNT:
         if ((identity.login != TEE_LOGIN_TRUSTED_APP) || !trx_ibme_isloaded(ibme))
         {
