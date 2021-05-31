@@ -299,6 +299,7 @@ TEE_Result trx_volume_table_serialize(trx_volume_table *volume_table, void *data
         exp_dst_size += e->volume->udid_size;
         exp_dst_size += trx_vk_size;
         exp_dst_size += sizeof(long unsigned int);
+        exp_dst_size += sizeof(size_t);
     }
     exp_dst_size += sizeof(unsigned long int);
 
@@ -343,6 +344,8 @@ TEE_Result trx_volume_table_serialize(trx_volume_table *volume_table, void *data
         cpy_ptr += trx_vk_size;
         memcpy(cpy_ptr, &(e->volume->version), sizeof(long unsigned int));
         cpy_ptr += sizeof(long unsigned int);
+        memcpy(cpy_ptr, &(e->volume->file_size), sizeof(size_t));
+        cpy_ptr += sizeof(size_t);
     }
     memcpy(cpy_ptr, &(volume_table->next_volume_ree_dirname_n), sizeof(long unsigned int));
     cpy_ptr += sizeof(long unsigned int);
@@ -480,6 +483,14 @@ TEE_Result trx_volume_table_deserialize(trx_volume_table *volume_table, void *da
         memcpy(&(volume->version), cpy_ptr, sizeof(long unsigned int));
         cpy_ptr += sizeof(long unsigned int);
         left -= sizeof(long unsigned int);
+        if (left < sizeof(size_t))
+        {
+            EMSG("failed checking size of \"data\" buffer");
+            return TEE_ERROR_GENERIC;
+        }
+        memcpy(&(volume->file_size), cpy_ptr, sizeof(size_t));
+        cpy_ptr += sizeof(size_t);
+        left -= sizeof(size_t);
     }
     if (left < sizeof(long unsigned int))
     {

@@ -33,6 +33,7 @@ typedef struct _trx_volume
     unsigned long int version;
     trx_vk *vk;
     bool isloaded;
+    size_t file_size;
 } trx_volume;
 
 trx_volume *trx_volume_init(void);
@@ -41,6 +42,7 @@ trx_volume *trx_volume_create(char *mount_point, size_t mount_point_size, char *
                               void *udid, size_t udid_size);
 TEE_Result trx_volume_set_udid(trx_volume *volume, void *udid, size_t udid_size);
 TEE_Result trx_volume_set_label(trx_volume *volume, char *label, size_t label_size);
+TEE_Result trx_volume_set_file_size(trx_volume *volume, size_t file_size);
 TEE_Result trx_volume_add(trx_volume *volume, struct _trx_tss *tss);
 struct _trx_tss *trx_volume_get(trx_volume *volume, TEE_UUID *uuid);
 TEE_Result trx_volume_serialize(trx_volume *volume, void *data, size_t *data_size);

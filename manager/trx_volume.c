@@ -43,6 +43,7 @@ trx_volume *trx_volume_init(void)
     volume->label_size = 0;
     volume->version = 0;
     volume->isloaded = false;
+    volume->file_size = 0;
 
     DMSG("initialized volume");
     return volume;
@@ -117,6 +118,7 @@ trx_volume *trx_volume_create(char *mount_point, size_t mount_point_size, char *
     }
 
     volume->isloaded = true;
+    volume->file_size = 0;
 
     DMSG("created volume, mount_point: \"%s\", mount_point_size: %zu, ree_dirname_size: \"%s\", ree_dirname_size: %zu, udid: \"%s\", udid_size: %zu",
          volume->mount_point, volume->mount_point_size, volume->ree_dirname, volume->ree_dirname_size, (char *)volume->udid, volume->udid_size);
@@ -169,6 +171,16 @@ TEE_Result trx_volume_set_label(trx_volume *volume, char *label, size_t label_si
     memcpy(volume->label, label, label_size);
 
     DMSG("set volume label: \"%s\", label_size: %zu", volume->label, volume->label_size);
+    return TEE_SUCCESS;
+}
+
+TEE_Result trx_volume_set_file_size(trx_volume *volume, size_t file_size)
+{
+    DMSG("setting volume file_size: %zu", file_size);
+
+    volume->file_size = file_size;
+
+    DMSG("set volume file_size: %zu", volume->file_size);
     return TEE_SUCCESS;
 }
 
@@ -385,8 +397,8 @@ TEE_Result trx_volume_save(trx_volume *volume)
 {
     TEE_Result res;
     int fd;
-    uint8_t *data_enc, sizeof_size, *data = NULL, *volume_data = NULL;
-    size_t data_size, data_enc_size, ree_path_size, volume_data_size, id_size;
+    uint8_t *data_enc = NULL, *volume_data = NULL;
+    size_t data_enc_size, ree_path_size, volume_data_size, id_size;
     char *ree_path;
     TEE_UUID uuid = TA_TRX_MANAGER_UUID;
 
@@ -427,18 +439,12 @@ TEE_Result trx_volume_save(trx_volume *volume)
         res = TEE_ERROR_GENERIC;
         goto out;
     }
-    sizeof_size = sizeof(size_t);
-    data_size = sizeof_size + data_enc_size;
-    if (!(data = malloc(data_size)))
+    if (!(data_enc = malloc(data_enc_size)))
     {
         EMSG("failed calling function \'malloc\'");
         res = TEE_ERROR_GENERIC;
         goto out;
     }
-
-    memcpy(data, &data_enc_size, sizeof_size);
-    data_enc = data + sizeof_size;
-
     res = trx_cipher_encrypt(volume->vk, &uuid, volume_data, volume_data_size,
                              volume->version, (char *)trx_volume_id, id_size, volume->udid, volume->udid_size,
                              data_enc, &data_enc_size);
@@ -465,7 +471,7 @@ TEE_Result trx_volume_save(trx_volume *volume)
         goto out;
     }
 
-    res = ree_fs_api_write(fd, 0, data, data_size);
+    res = ree_fs_api_write(fd, 0, data_enc, data_enc_size);
     if (res != TEE_SUCCESS)
     {
         EMSG("failed calling function \'ree_fs_api_write\'");
@@ -473,10 +479,12 @@ TEE_Result trx_volume_save(trx_volume *volume)
         goto out;
     }
 
+    volume->file_size = data_enc_size;
+
     DMSG("saved volume, version: %lu", volume->version);
 out:
+    free(data_enc);
     free(volume_data);
-    free(data);
     ree_fs_api_close(fd);
     return res;
 }
@@ -485,8 +493,8 @@ TEE_Result trx_volume_load(trx_volume *volume)
 {
     int fd;
     TEE_Result res;
-    uint8_t *data = NULL, sizeof_size, *volume_data = NULL;
-    size_t data_size, ree_path_size, tmp_size, volume_data_size, id_size;
+    uint8_t *data_enc = NULL, *volume_data = NULL;
+    size_t data_enc_size, ree_path_size, volume_data_size, id_size;
     char *ree_path;
     TEE_UUID uuid = TA_TRX_MANAGER_UUID;
 
@@ -500,6 +508,14 @@ TEE_Result trx_volume_load(trx_volume *volume)
     }
     ree_path_size = strlen(ree_path) + 1;
 
+    data_enc_size = volume->file_size;
+    if (!(data_enc = malloc(data_enc_size)))
+    {
+        EMSG("failed calling function \'malloc\'");
+        res = TEE_ERROR_GENERIC;
+        goto out;
+    }
+
     res = ree_fs_api_open(ree_path, ree_path_size, &fd);
     if (res != TEE_SUCCESS)
     {
@@ -507,27 +523,8 @@ TEE_Result trx_volume_load(trx_volume *volume)
         res = TEE_ERROR_GENERIC;
         goto out;
     }
-    sizeof_size = sizeof(size_t);
-    tmp_size = sizeof_size;
-    res = ree_fs_api_read(fd, 0, &data_size, &tmp_size);
-    if ((res != TEE_SUCCESS) || (tmp_size != sizeof_size))
-    {
-        EMSG("failed calling function \'ree_fs_api_read\'");
-        res = TEE_ERROR_GENERIC;
-        goto out;
-    }
-
-    if (!(data = malloc(data_size)))
-    {
-        EMSG("failed calling function \'malloc\'");
-        res = TEE_ERROR_GENERIC;
-        goto out;
-    }
-
-    tmp_size = data_size;
-    res = ree_fs_api_read(fd, sizeof_size, data, &tmp_size);
-
-    if ((res != TEE_SUCCESS) || (tmp_size != data_size))
+    res = ree_fs_api_read(fd, 0, data_enc, &data_enc_size);
+    if ((res != TEE_SUCCESS) || (data_enc_size != volume->file_size))
     {
         EMSG("failed calling function \'ree_fs_api_read\'");
         res = TEE_ERROR_GENERIC;
@@ -536,7 +533,7 @@ TEE_Result trx_volume_load(trx_volume *volume)
 
     id_size = strlen(trx_volume_id) + 1;
 
-    res = trx_cipher_decrypt(volume->vk, &uuid, data, data_size, volume->version, (char *)trx_volume_id, id_size,
+    res = trx_cipher_decrypt(volume->vk, &uuid, data_enc, data_enc_size, volume->version, (char *)trx_volume_id, id_size,
                              volume->udid, volume->udid_size, NULL, &volume_data_size);
     if (res != TEE_ERROR_SHORT_BUFFER)
     {
@@ -552,7 +549,7 @@ TEE_Result trx_volume_load(trx_volume *volume)
         goto out;
     }
 
-    res = trx_cipher_decrypt(volume->vk, &uuid, data, data_size, volume->version, (char *)trx_volume_id, id_size,
+    res = trx_cipher_decrypt(volume->vk, &uuid, data_enc, data_enc_size, volume->version, (char *)trx_volume_id, id_size,
                              volume->udid, volume->udid_size, volume_data, &volume_data_size);
     if (res != TEE_SUCCESS)
     {
@@ -573,7 +570,7 @@ TEE_Result trx_volume_load(trx_volume *volume)
 
 out:
     ree_fs_api_close(fd);
-    free(data);
+    free(data_enc);
     free(volume_data);
     return res;
 }
@@ -613,6 +610,7 @@ TEE_Result trx_volume_share_serialize(trx_volume *volume, void *data, size_t *da
     exp_dst_size += sizeof(size_t);
     exp_dst_size += volume->udid_size;
     exp_dst_size += sizeof(size_t);
+    exp_dst_size += sizeof(size_t);
     exp_dst_size += volume->label_size;
 
     if (!data)
@@ -648,6 +646,9 @@ TEE_Result trx_volume_share_serialize(trx_volume *volume, void *data, size_t *da
 
     memcpy(cpy_ptr, volume->udid, volume->udid_size);
     cpy_ptr += volume->udid_size;
+
+    memcpy(cpy_ptr, &(volume->file_size), sizeof(size_t));
+    cpy_ptr += sizeof(size_t);
 
     memcpy(cpy_ptr, &(volume->label_size), sizeof(size_t));
     cpy_ptr += sizeof(size_t);
@@ -721,6 +722,21 @@ TEE_Result trx_volume_share_deserialize(trx_volume *volume, void *data, size_t d
     }
     cpy_ptr += volume->udid_size;
     left -= volume->udid_size;
+
+    if (left < sizeof(size_t))
+    {
+        EMSG("failed checking size of \"data\" buffer");
+        return TEE_ERROR_GENERIC;
+    }
+    memcpy(&tmp_size, cpy_ptr, sizeof(size_t));
+    res = trx_volume_set_file_size(volume, tmp_size);
+    if (res != TEE_SUCCESS)
+    {
+        EMSG("failed calling function \'trx_volume_set_file_size\'");
+        return TEE_ERROR_GENERIC;
+    }
+    cpy_ptr += sizeof(size_t);
+    left -= sizeof(size_t);
 
     if (left < sizeof(size_t))
     {
