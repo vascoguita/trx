@@ -8,6 +8,11 @@
 
 #include "trx_demo_private.h"
 
+char *cipher = NULL;
+size_t cipher_size = 0;
+char *dir = NULL;
+size_t dir_size;
+
 TEE_Result TA_CreateEntryPoint(void)
 {
     DMSG("has been called");
@@ -113,8 +118,8 @@ out:
 TEE_Result share(trx_handle handle)
 {
     TEE_Result res;
-    char input[100], *id = NULL, *mount_point = NULL, *label = NULL;
-    size_t input_size, id_size, mount_point_size, label_size;
+    char input[100], *id = NULL, *mount_point = NULL, *label = NULL, *data = NULL;
+    size_t input_size, id_size, mount_point_size, label_size, data_size;
 
     input_size = 100;
 
@@ -145,7 +150,15 @@ TEE_Result share(trx_handle handle)
     }
     label = strdup(input);
     label_size = strlen(id) + 1;
-    res = trx_share(handle, (unsigned char *)id, id_size, mount_point, mount_point_size, label, label_size);
+    
+    data_size = 1500;
+    if (!(data = malloc(data_size)))
+    {
+        DMSG("malloc failed");
+        res = TEE_ERROR_GENERIC;
+        goto out;
+    }
+    res = trx_share(handle, (unsigned char *)id, id_size, mount_point, mount_point_size, label, label_size, data, &data_size);
     if (res != TEE_SUCCESS)
     {
         DMSG("trx_share failed with code 0x%x", res);
@@ -153,7 +166,48 @@ TEE_Result share(trx_handle handle)
         goto out;
     }
 
+    memcpy(&cipher_size, data, sizeof(size_t));
+    if(cipher)
+    {
+        free(cipher);
+    }
+    if (!(cipher = malloc(cipher_size)))
+    {
+        DMSG("malloc failed");
+        res = TEE_ERROR_GENERIC;
+        goto out;
+    }
+    memcpy(cipher, data + sizeof(size_t), cipher_size);
+    res = TUI->print(cipher);
+    if (res != TEE_SUCCESS)
+    {
+        EMSG("Failed to print with code 0x%x", res);
+        res = TEE_ERROR_GENERIC;
+        goto out;
+    }
+    memcpy(&dir_size, data + sizeof(size_t) + cipher_size, sizeof(size_t));
+    if(dir)
+    {
+        free(dir);
+    }
+    if (!(dir = malloc(dir_size)))
+    {
+        DMSG("malloc failed");
+        res = TEE_ERROR_GENERIC;
+        goto out;
+    }
+    memcpy(dir, data + sizeof(size_t) + cipher_size + sizeof(size_t), dir_size);
+
+    res = TUI->print(dir);
+    if (res != TEE_SUCCESS)
+    {
+        EMSG("Failed to print with code 0x%x", res);
+        res = TEE_ERROR_GENERIC;
+        goto out;
+    }
+
 out:
+    free(data);
     free(mount_point);
     free(id);
     free(label);
@@ -163,20 +217,11 @@ out:
 TEE_Result mount(trx_handle handle)
 {
     TEE_Result res;
-    char input[100], *id = NULL, *mount_point = NULL, *dirname = NULL;
-    size_t input_size, id_size, mount_point_size, dirname_size;
+    char input[100], *id = NULL, *mount_point = NULL;
+    size_t input_size, id_size, mount_point_size;
 
     input_size = 100;
 
-    res = TUI->input("Enter dirname: ", input, input_size);
-    if (res != TEE_SUCCESS)
-    {
-        EMSG("Failed to input with code 0x%x", res);
-        res = TEE_ERROR_GENERIC;
-        goto out;
-    }
-    dirname = strdup(input);
-    dirname_size = strlen(dirname) + 1;
     res = TUI->input("Enter mount point: ", input, input_size);
     if (res != TEE_SUCCESS)
     {
@@ -195,7 +240,7 @@ TEE_Result mount(trx_handle handle)
     }
     id = strdup(input);
     id_size = strlen(id) + 1;
-    res = trx_mount(handle, (unsigned char *)id, id_size, dirname, dirname_size, mount_point, mount_point_size);
+    res = trx_mount(handle, (unsigned char *)id, id_size, dir, dir_size, mount_point, mount_point_size, cipher, cipher_size);
     if (res != TEE_SUCCESS)
     {
         DMSG("trx_mount failed with code 0x%x", res);
@@ -204,7 +249,6 @@ TEE_Result mount(trx_handle handle)
     }
 out:
     free(mount_point);
-    free(dirname);
     free(id);
     return res;
 }
@@ -294,6 +338,16 @@ TEE_Result TA_OpenSessionEntryPoint(uint32_t param_types, TEE_Param params[4], v
 void TA_CloseSessionEntryPoint(void *sess_ctx)
 {
     (void)&sess_ctx;
+
+    if(dir)
+    {
+        free(dir);
+    }
+
+    if(cipher)
+    {
+        free(cipher);
+    }
 
     DMSG("has been called");
 }

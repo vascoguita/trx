@@ -129,7 +129,6 @@ TEE_Result trx_volume_set_udid(trx_volume *volume, void *udid, size_t udid_size)
 {
     DMSG("setting volume udid: \"%s\", udid_size: %zu", (char *)udid, udid_size);
 
-    
     if (volume->udid_size != udid_size)
     {
         free(volume->udid);
@@ -715,7 +714,7 @@ TEE_Result trx_volume_share_deserialize(trx_volume *volume, void *data, size_t d
         return TEE_ERROR_GENERIC;
     }
     res = trx_volume_set_udid(volume, cpy_ptr, tmp_size);
-    if(res != TEE_SUCCESS)
+    if (res != TEE_SUCCESS)
     {
         EMSG("failed calling function \'trx_volume_set_udid\'");
         return TEE_ERROR_GENERIC;
@@ -753,7 +752,7 @@ TEE_Result trx_volume_share_deserialize(trx_volume *volume, void *data, size_t d
         return TEE_ERROR_GENERIC;
     }
     res = trx_volume_set_label(volume, (char *)cpy_ptr, tmp_size);
-    if(res != TEE_SUCCESS)
+    if (res != TEE_SUCCESS)
     {
         EMSG("failed calling function \'trx_volume_set_label\'");
         return TEE_ERROR_GENERIC;
@@ -772,15 +771,12 @@ TEE_Result trx_volume_share_deserialize(trx_volume *volume, void *data, size_t d
     return TEE_SUCCESS;
 }
 
-TEE_Result trx_volume_share(trx_volume *volume, char *R, size_t R_size, trx_ibme *ibme)
+TEE_Result trx_volume_share(trx_volume *volume, char *R, size_t R_size, trx_ibme *ibme, void *dst, size_t *dst_size)
 {
     TEE_Result res;
-    Cipher *volume_share_enc = NULL;
+    Cipher *cipher = NULL;
     uint8_t *volume_share = NULL;
-    void *data = NULL;
-    char *ree_path;
-    size_t data_size, ree_path_size, volume_share_size;
-    int fd;
+    size_t volume_share_size, cipher_str_size, exp_dst_size;
 
     DMSG("sharing volume");
 
@@ -813,128 +809,78 @@ TEE_Result trx_volume_share(trx_volume *volume, char *R, size_t R_size, trx_ibme
         goto out;
     }
 
-    if (!(volume_share_enc = Cipher_init(*(ibme->pairing))))
+    if (!(cipher = Cipher_init(*(ibme->pairing))))
     {
         EMSG("failed calling function \'Cipher_init\'");
         res = TEE_ERROR_GENERIC;
         goto out;
     }
     if (1 == ibme_enc(*(ibme->pairing), ibme->mpk, ibme->ek, (unsigned char *)R, R_size, volume_share,
-                      volume_share_size, volume_share_enc))
+                      volume_share_size, cipher))
     {
         EMSG("failed calling function \'ibme_enc\'");
         res = TEE_ERROR_GENERIC;
         goto out;
     }
 
-    if ((data_size = Cipher_snprint(NULL, 0, volume_share_enc) + 1) < 1)
+    if ((cipher_str_size = (size_t)(Cipher_snprint(NULL, 0, cipher) + 1)) < 1)
     {
         EMSG("failed calling function \'Cipher_snprint\'");
         res = TEE_ERROR_GENERIC;
         goto out;
     }
 
-    if (!(data = malloc(data_size + sizeof(size_t))))
+    exp_dst_size = sizeof(size_t) + cipher_str_size + sizeof(size_t) + volume->ree_dirname_size;
+    if (!dst)
     {
-        EMSG("failed calling function \'malloc\'");
+        *dst_size = exp_dst_size;
+        DMSG("defining required buffer size to share volume: %zu", *dst_size);
+        res = TEE_ERROR_SHORT_BUFFER;
+        goto out;
+    }
+    if (*dst_size < exp_dst_size)
+    {
+        EMSG("failed checking size of \"dst\" buffer, provided_size: %zu, required_size: %zu", *dst_size, exp_dst_size);
         res = TEE_ERROR_GENERIC;
         goto out;
     }
 
-    memcpy(data, &data_size, sizeof(size_t));
-
-    if (data_size != (size_t)(Cipher_snprint((char *)data + sizeof(size_t), data_size, volume_share_enc) + 1))
+    memcpy(dst, &cipher_str_size, sizeof(size_t));
+    dst = (uint8_t *)dst + sizeof(size_t);
+    if (cipher_str_size != (size_t)(Cipher_snprint(dst, cipher_str_size, cipher) + 1))
     {
         EMSG("failed calling function \'Cipher_snprint\'");
         res = TEE_ERROR_GENERIC;
         goto out;
     }
-
-    ree_path = path(volume->ree_dirname, trx_vk_ree_basename);
-    ree_path_size = strlen(ree_path) + 1;
-
-    res = ree_fs_api_create(ree_path, ree_path_size, &fd);
-    if (res != TEE_SUCCESS)
-    {
-        EMSG("failed calling function \'ree_fs_api_create\'");
-        res = TEE_ERROR_GENERIC;
-        goto out;
-    }
-    res = ree_fs_api_write(fd, 0, data, data_size + sizeof(size_t));
-    if (res != TEE_SUCCESS)
-    {
-        EMSG("failed calling function \'ree_fs_api_write\'");
-        res = TEE_ERROR_GENERIC;
-        goto out;
-    }
+    dst = (uint8_t *)dst + cipher_str_size;
+    memcpy(dst, &(volume->ree_dirname_size), sizeof(size_t));
+    dst = (uint8_t *)dst + sizeof(size_t);
+    memcpy(dst, volume->ree_dirname, volume->ree_dirname_size);
+    *dst_size = exp_dst_size;
 
     DMSG("shared volume");
 
 out:
-    ree_fs_api_close(fd);
-    free(data);
     free(volume_share);
-    Cipher_clear(volume_share_enc);
+    Cipher_clear(cipher);
     return res;
 }
 
-TEE_Result trx_volume_import(trx_volume *volume, char *S, size_t S_size, trx_ibme *ibme)
+TEE_Result trx_volume_import(trx_volume *volume, char *S, size_t S_size, trx_ibme *ibme, char *src, size_t src_size)
 {
     Cipher *volume_share_enc = NULL;
     TEE_Result res;
     uint8_t *volume_share = NULL;
-    void *data = NULL;
-    char *ree_path = NULL;
-    size_t ree_path_size, data_size, tmp_size, volume_share_size;
-    int fd;
+    size_t volume_share_size;
 
     DMSG("importing volume");
 
-    if (!volume || !S || !S_size || !ibme)
+    if (!volume || !S || !S_size || !ibme || !src || !src_size)
     {
         EMSG("failed checking if volume is not NULL or sender id is not NULL"
-             "or size of sender id is greater than 0 or ibme structure is not NULL");
-        res = TEE_ERROR_GENERIC;
-        goto out;
-    }
-
-    if (!(ree_path = path(volume->ree_dirname, trx_vk_ree_basename)))
-    {
-        EMSG("failed calling function \'path\'");
-        res = TEE_ERROR_GENERIC;
-        goto out;
-    }
-    ree_path_size = strlen(ree_path) + 1;
-
-    res = ree_fs_api_open(ree_path, ree_path_size, &fd);
-    if (res != TEE_SUCCESS)
-    {
-        EMSG("failed calling function \'ree_fs_api_open\'");
-        res = TEE_ERROR_GENERIC;
-        goto out;
-    }
-
-    tmp_size = sizeof(size_t);
-    res = ree_fs_api_read(fd, 0, &data_size, &tmp_size);
-    if ((res != TEE_SUCCESS) || (tmp_size != sizeof(size_t)))
-    {
-        EMSG("failed calling function \'ree_fs_api_read\'");
-        res = TEE_ERROR_GENERIC;
-        goto out;
-    }
-
-    if (!(data = malloc(data_size)))
-    {
-        EMSG("failed calling function \'malloc\'");
-        res = TEE_ERROR_GENERIC;
-        goto out;
-    }
-
-    tmp_size = data_size;
-    res = ree_fs_api_read(fd, sizeof(size_t), data, &tmp_size);
-    if ((res != TEE_SUCCESS) || (tmp_size != data_size))
-    {
-        EMSG("failed calling function \'ree_fs_api_read\'");
+             "or size of sender id is greater than 0 or ibme structure is not NULL"
+             "or src is not NULL or size of src is greater than 0");
         res = TEE_ERROR_GENERIC;
         goto out;
     }
@@ -945,7 +891,7 @@ TEE_Result trx_volume_import(trx_volume *volume, char *S, size_t S_size, trx_ibm
         res = TEE_ERROR_GENERIC;
         goto out;
     }
-    if (0 == Cipher_set_str(data, data_size, volume_share_enc))
+    if (0 == Cipher_set_str(src, src_size, volume_share_enc))
     {
         EMSG("failed calling function \'Cipher_set_str\'");
         res = TEE_ERROR_GENERIC;
@@ -985,7 +931,5 @@ TEE_Result trx_volume_import(trx_volume *volume, char *S, size_t S_size, trx_ibm
 out:
     Cipher_clear(volume_share_enc);
     free(volume_share);
-    free(data);
-    ree_fs_api_close(fd);
     return res;
 }

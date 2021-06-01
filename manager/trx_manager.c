@@ -298,7 +298,7 @@ TEE_Result read(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
     if (*data_size < (uint32_t)pobj->data_size)
     {
         EMSG("failed checking size of \"data\" buffer, provided_size: %zu, required_size: %zu",
-             (size_t)*data_size, (size_t)pobj->data_size);
+             (size_t)*data_size, pobj->data_size);
         return TEE_ERROR_GENERIC;
     }
 
@@ -326,10 +326,11 @@ TEE_Result read(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
 
 TEE_Result share(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
 {
-    uint32_t exp_param_types;
+    uint32_t exp_param_types, *dst_size;
     char *R, *mount_point, *label;
-    size_t R_size, mount_point_size, label_size;
+    size_t R_size, mount_point_size, label_size, tmp_dst_size;
     trx_volume *volume;
+    uint8_t *dst = NULL;
     TEE_Result res;
 
     (void)&sess_ctx;
@@ -337,7 +338,7 @@ TEE_Result share(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
     DMSG("has been called");
 
     exp_param_types = TEE_PARAM_TYPES(TEE_PARAM_TYPE_MEMREF_INPUT, TEE_PARAM_TYPE_MEMREF_INPUT,
-                                      TEE_PARAM_TYPE_MEMREF_INPUT, TEE_PARAM_TYPE_NONE);
+                                      TEE_PARAM_TYPE_MEMREF_INPUT, TEE_PARAM_TYPE_MEMREF_OUTPUT);
     if (param_types != exp_param_types)
     {
         EMSG("failed checking parameter types");
@@ -350,6 +351,8 @@ TEE_Result share(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
     mount_point_size = params[1].memref.size;
     label = params[2].memref.buffer;
     label_size = params[2].memref.size;
+    dst = params[3].memref.buffer;
+    dst_size = &(params[3].memref.size);
 
     DMSG("sharing volume mounted on mount_point: \"%s\" with mount_point size: %zu and"
          " label: \"%s\" with label_point size: %zu with receiver: \"%s\" with receiver size %zu",
@@ -374,25 +377,34 @@ TEE_Result share(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
         return TEE_ERROR_GENERIC;
     }
 
-    res = trx_volume_share(volume, R, R_size, ibme);
-    if (res != TEE_SUCCESS)
+    tmp_dst_size = (size_t)*dst_size;
+    res = trx_volume_share(volume, R, R_size, ibme, dst, &tmp_dst_size);
+    if (res == TEE_ERROR_SHORT_BUFFER)
+    {
+        *dst_size = (uint32_t)tmp_dst_size;
+        DMSG("defining required buffer size to share volume: %zu", (size_t)*dst_size);
+        return res;
+    }
+    else if (res == TEE_SUCCESS)
+    {
+        *dst_size = (uint32_t)tmp_dst_size;
+        DMSG("shared volume mounted on mount_point: \"%s\" with mount_point size: %zu and"
+             " label: \"%s\" with label_point size: %zu with receiver: \"%s\" with receiver size %zu",
+             mount_point, mount_point_size, label, label_size, R, R_size);
+        return res;
+    }
+    else
     {
         EMSG("failed calling function \'trx_volume_share\'");
         return TEE_ERROR_GENERIC;
     }
-
-    DMSG("shared volume mounted on mount_point: \"%s\" with mount_point size: %zu and"
-         " label: \"%s\" with label_point size: %zu with receiver: \"%s\" with receiver size %zu",
-         mount_point, mount_point_size, label, label_size, R, R_size);
-
-    return res;
 }
 
 TEE_Result mount(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
 {
     uint32_t exp_param_types;
-    char *S, *ree_dirname, *mount_point;
-    size_t S_size, ree_dirname_size, mount_point_size;
+    char *S, *ree_dirname, *mount_point, *src;
+    size_t S_size, ree_dirname_size, mount_point_size, src_size;
     trx_volume *volume;
     TEE_Result res;
 
@@ -401,7 +413,7 @@ TEE_Result mount(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
     DMSG("has been called");
 
     exp_param_types = TEE_PARAM_TYPES(TEE_PARAM_TYPE_MEMREF_INPUT, TEE_PARAM_TYPE_MEMREF_INPUT,
-                                      TEE_PARAM_TYPE_MEMREF_INPUT, TEE_PARAM_TYPE_NONE);
+                                      TEE_PARAM_TYPE_MEMREF_INPUT, TEE_PARAM_TYPE_MEMREF_INPUT);
     if (param_types != exp_param_types)
     {
         EMSG("failed checking parameter types");
@@ -414,6 +426,8 @@ TEE_Result mount(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
     ree_dirname_size = (size_t)params[1].memref.size;
     mount_point = params[2].memref.buffer;
     mount_point_size = (size_t)params[2].memref.size;
+    src = params[3].memref.buffer;
+    src_size = (size_t)params[3].memref.size;
 
     DMSG("mounting volume from sender: \"%s\" with sender size: %zu and ree_dirname: \"%s\""
          "with ree_dirname_size: %zu on mount_point: \"%s\" with mount_point size: %zu",
@@ -440,7 +454,7 @@ TEE_Result mount(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
     }
     volume->ree_dirname_size = ree_dirname_size;
 
-    res = trx_volume_import(volume, S, S_size, ibme);
+    res = trx_volume_import(volume, S, S_size, ibme, src, src_size);
     if (res != TEE_SUCCESS)
     {
         EMSG("failed calling function \'trx_volume_import\'");

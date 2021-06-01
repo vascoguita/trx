@@ -56,8 +56,8 @@ bool trx_volume_is_loaded(trx_volume *volume);
 
 TEE_Result trx_volume_share_serialize(trx_volume *volume, void *data, size_t *data_size);
 TEE_Result trx_volume_share_deserialize(trx_volume *volume, void *data, size_t data_size);
-TEE_Result trx_volume_share(trx_volume *volume, char *R, size_t R_size, trx_ibme *ibme);
-TEE_Result trx_volume_import(trx_volume *volume, char *S, size_t S_size, trx_ibme *ibme);
+TEE_Result trx_volume_share(trx_volume *volume, char *R, size_t R_size, trx_ibme *ibme, void *dst, size_t *dst_size);
+TEE_Result trx_volume_import(trx_volume *volume, char *S, size_t S_size, trx_ibme *ibme, char *src, size_t src_size);
 
 static const char trx_volume_ree_dirname_fmt[] = "volume_%lu.trx";
 static const char trx_volume_ree_basename[] = "table.trx";
