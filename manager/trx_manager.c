@@ -11,6 +11,7 @@
 #include "trx_utils.h"
 #include "trx_ibme.h"
 #include "trx_authorization.h"
+#include "trx_authentication.h"
 
 TEE_Result setup(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
 {
@@ -364,7 +365,7 @@ TEE_Result share(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
         return TEE_ERROR_GENERIC;
     }
 
-    if (!trx_authorization_share(mount_point, R, volume->version, label))
+    if (!trx_authorization_share(auth, mount_point, R, volume->version, label))
     {
         EMSG("failed calling function \'trx_authorization_share\'");
         return TEE_ERROR_GENERIC;
@@ -462,7 +463,7 @@ TEE_Result mount(void *sess_ctx, uint32_t param_types, TEE_Param params[4])
         return TEE_ERROR_GENERIC;
     }
 
-    if (!trx_authorization_mount(mount_point, S, volume->version, volume->label))
+    if (!trx_authorization_mount(auth, mount_point, S, volume->version, volume->label))
     {
         EMSG("failed calling function \'trx_authorization_mount\'");
         trx_volume_clear(volume);

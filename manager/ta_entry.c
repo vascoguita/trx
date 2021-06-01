@@ -4,12 +4,33 @@
 
 trx_volume_table *volume_table = NULL;
 trx_ibme *ibme = NULL;
+trx_authentication *auth = NULL;
 
 TEE_Result TA_CreateEntryPoint(void)
 {
     TEE_Result res;
 
     DMSG("has been called");
+
+    if (!(auth = trx_authentication_init()))
+    {
+        EMSG("failed calling function \'trx_authentication_init\'");
+        return TEE_ERROR_GENERIC;
+    }
+    res = trx_authentication_load(auth);
+    if (res == TEE_ERROR_ITEM_NOT_FOUND)
+    {
+        res = trx_authentication_setup(auth);
+        if (res != TEE_SUCCESS)
+        {
+            EMSG("failed calling function \'trx_authentication_setup\'");
+            return TEE_ERROR_GENERIC;
+        }
+    } else if (res != TEE_SUCCESS)
+    {
+        EMSG("failed calling function \'trx_authentication_load\'");
+        return TEE_ERROR_GENERIC;
+    }
 
     if (!(ibme = trx_ibme_init()))
     {
@@ -51,6 +72,10 @@ void TA_DestroyEntryPoint(void)
     if (volume_table)
     {
         trx_volume_table_clear(volume_table);
+    }
+    if (auth)
+    {
+        trx_authentication_clear(auth);
     }
 }
 

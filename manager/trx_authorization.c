@@ -1,4 +1,5 @@
 #include "trx_authorization.h"
+#include "trx_authentication.h"
 
 #include <tee_internal_api.h>
 #include <string.h>
@@ -8,7 +9,7 @@
 #include <stdio.h>
 #include <tui/tui.h>
 
-bool trx_authorization_authorize(const char *fmt, ...)
+bool trx_authorization_authorize(trx_authentication *auth, const char *fmt, ...)
 {
     size_t m_size, input_size;
     char *m;
@@ -45,25 +46,24 @@ bool trx_authorization_authorize(const char *fmt, ...)
         return false;
     }
     free(m);
-    if (strncmp(input, "y", strlen("y")) != 0)
-    {
-        return false;
-    }
-    return true;
+
+    return trx_authentication_check(auth, input);
 }
 
-bool trx_authorization_share(const char *mount_point, const char *R, const unsigned long int version, const char *label)
+bool trx_authorization_share(trx_authentication *auth, const char *mount_point, const char *R, const unsigned long int version, const char *label)
 {
-    return trx_authorization_authorize("Authorize Secure Storage Volume mounted on \"%s\""
+    return trx_authorization_authorize(auth,
+                                       "Authorize Secure Storage Volume mounted on \"%s\""
                                        " with version %lu and label \"%s\""
-                                       " to be shared with \"%s\"? [y\\n] ",
+                                       " to be shared with \"%s\"?\nPIN: ",
                                        mount_point, version, label, R);
 }
 
-bool trx_authorization_mount(const char *mount_point, const char *S, const unsigned long int version, const char *label)
+bool trx_authorization_mount(trx_authentication *auth, const char *mount_point, const char *S, const unsigned long int version, const char *label)
 {
-    return trx_authorization_authorize("Authorize Secure Storage Volume from \"%s\""
+    return trx_authorization_authorize(auth,
+                                       "Authorize Secure Storage Volume from \"%s\""
                                        " with version %lu and label \"%s\""
-                                       " to be mounted on \"%s\"? [y\\n] ",
+                                       " to be mounted on \"%s\"?\nPIN: ",
                                        S, version, label, mount_point);
 }
